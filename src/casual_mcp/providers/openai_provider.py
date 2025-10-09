@@ -153,10 +153,10 @@ class OpenAiProvider(CasualMcpProvider):
         # Convert Messages to OpenAI format
         converted_messages = convert_messages(messages)
         logger.debug(f"Converted Messages: {converted_messages}")
-        logger.info(f"Adding {len(converted_messages)} messages")
 
         # Call OpenAi API
         try:
+            logger.info(f"Calling LLM with {len(converted_messages)} messages")
             result = self.client.chat.completions.create(
                 model=self.model, messages=converted_messages, tools=self.tools
             )
@@ -166,6 +166,7 @@ class OpenAiProvider(CasualMcpProvider):
             logger.warning(f"Error in Generation: {e}")
             raise GenerationError(str(e))
 
+        logger.info(f"LLM Response received")
         logger.debug(response)
 
         # Convert any tool calls
