@@ -145,7 +145,7 @@ class McpToolChat:
         logger.debug(f"Tool Call Result: {result}")
 
         result_format = os.getenv('TOOL_RESULT_FORMAT', 'result')
-        content = format_tool_call_result(tool_call, result[0].text, style=result_format)
+        content = format_tool_call_result(tool_call, result.content[0].text, style=result_format)
 
         return ToolResultMessage(
             name=tool_call.function.name,

@@ -1,5 +1,4 @@
 {
-    "namespaced_tools": false,
     "models": {
         "ollama-llama3.1": {
             "provider": "ollama",
@@ -17,50 +16,34 @@
             "model": "qwen2.5"
         },
         "lm-phi-4-mini": {
-            "provider": "openai",
+            "provider": "ollama",
             "endpoint": "http://kovacs.jinkies.net:1234/v1",
             "model": "phi-4-mini-instruct",
             "template": "phi-4-mini-instruct-1"
         },
-        "lm-hermes-3": {
+        "gpt-5": {
             "provider": "openai",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "hermes-3-llama-3.2-3b",
-            "template": "lm-studio-default-tools"
+            "model": "gpt-5"
         },
-        "lm-qwen-3": {
+        "gpt-5-mini": {
             "provider": "openai",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "qwen3-8b",
-            "template": "lm-studio-native-tools"
+            "model": "gpt-5-mini"
         },
-        "lm-toolace-2": {
+        "gpt-5-nano": {
             "provider": "openai",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "toolace-2-llama-3.1-8b-i1",
-            "template": "lm-studio-native-tools"
+            "model": "gpt-5-nano"
         },
-        "lm-groq": {
+        "gpt-4.1": {
             "provider": "openai",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "llama-3-groq-8b-tool-use",
-            "template": "lm-studio-default-tools"
-        },
-        "gpt-4o-mini": {
-            "provider": "openai",
-            "model": "gpt-4o-mini"
-        },
-        "gpt-4.1-nano": {
-            "provider": "openai",
-            "model": "gpt-4.1-nano"
+            "model": "gpt-4.1"
         },
         "gpt-4.1-mini": {
             "provider": "openai",
             "model": "gpt-4.1-mini"
         },
-        "gpt-4.1": {
+        "gpt-4.1-nano": {
             "provider": "openai",
-            "model": "gpt-4.1"
+            "model": "gpt-4.1-nano"
         }
     },
     "servers": {
@@ -69,16 +52,16 @@
             "args": ["mcp-servers/math/server.py"]
         },
         "time": {
-            "command": "python",
-            "args": ["mcp-servers/time-v2/server.py"]
+            "command": "uvx",
+            "args": ["casual-mcp-server-time"]
         },
         "weather": {
-            "command": "python",
-            "args": ["mcp-servers/weather/server.py"]
+            "command": "uvx",
+            "args": ["casual-mcp-server-weather"]
         },
         "words": {
-            "command": "python",
-            "args": ["mcp-servers/words/server.py"]
+            "command": "uvx",
+            "args": ["casual-mcp-server-words"]
         },
         "fetch": {
             "command": "npx",

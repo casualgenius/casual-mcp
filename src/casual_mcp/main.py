@@ -13,6 +13,11 @@ from casual_mcp.providers.provider_factory import ProviderFactory
 from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
 
 load_dotenv()
+
+# Configure logging
+configure_logging(os.getenv("LOG_LEVEL", 'INFO'))
+logger = get_logger("main")
+
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 provider_factory = ProviderFactory(mcp_client)
@@ -61,9 +66,7 @@ class ChatRequest(BaseModel):
 
 sys.path.append(str(Path(__file__).parent.resolve()))
 
-# Configure logging
-configure_logging(os.getenv("LOG_LEVEL", 'INFO'))
-logger = get_logger("main")
+
 
 
 @app.post("/chat")
