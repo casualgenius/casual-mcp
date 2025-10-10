@@ -8,27 +8,35 @@ from casual_mcp.logging import get_logger
 from casual_mcp.models.model_config import ModelConfig
 from casual_mcp.providers.ollama_provider import OllamaProvider
 from casual_mcp.providers.openai_provider import OpenAiProvider
+from casual_mcp.tool_cache import ToolCache
 
 logger = get_logger("providers.factory")
 
 LLMProvider: TypeAlias = OpenAiProvider | OllamaProvider
 
 class ProviderFactory:
-    providers: dict[str, LLMProvider] = {}
-    tools: list[mcp.Tool] = None
-
-    def __init__(self, mcp_client: Client):
+    def __init__(self, mcp_client: Client, tool_cache: ToolCache | None = None):
         self.mcp_client = mcp_client
+        self.tool_cache = tool_cache or ToolCache(mcp_client)
+        self.providers: dict[str, LLMProvider] = {}
+        self.tools: list[mcp.Tool] | None = None
+        self._tool_cache_version: int = -1
 
 
     def set_tools(self, tools: list[mcp.Tool]):
         self.tools = tools
+        self.tool_cache.prime(tools)
+        self._tool_cache_version = self.tool_cache.version
 
 
     async def get_provider(self, name: str, config: ModelConfig) -> LLMProvider:
-        if not self.tools:
-            async with self.mcp_client:
-                self.tools = await self.mcp_client.list_tools()
+        tools = await self.tool_cache.get_tools()
+        if self.tool_cache.version != self._tool_cache_version:
+            logger.info("Tool cache refreshed; updating providers")
+            self.tools = tools
+            self._tool_cache_version = self.tool_cache.version
+            for provider in self.providers.values():
+                provider.update_tools(tools)
 
         if self.providers.get(name):
             return self.providers.get(name)
@@ -48,7 +56,7 @@ class ProviderFactory:
                 provider = OpenAiProvider(
                     config.model,
                     api_key,
-                    self.tools,
+                    tools,
                     endpoint=endpoint,
                 )
 

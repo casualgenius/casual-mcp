@@ -177,3 +177,7 @@ class OpenAiProvider(CasualMcpProvider):
             logger.debug(f"Converted {len(tool_calls)} tool calls")
 
         return AssistantMessage(content=response.message.content, tool_calls=tool_calls)
+
+    def update_tools(self, tools: list[mcp.Tool]) -> None:
+        self.tools = convert_tools(tools)
+        logger.info(f"Provider tool catalogue refreshed with {len(self.tools)} tools")

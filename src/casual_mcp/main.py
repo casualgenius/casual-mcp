@@ -10,6 +10,7 @@ from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
 from casual_mcp.models.messages import ChatMessage
 from casual_mcp.providers.provider_factory import ProviderFactory
+from casual_mcp.tool_cache import ToolCache
 from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
 
 load_dotenv()
@@ -20,7 +21,8 @@ logger = get_logger("main")
 
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
-provider_factory = ProviderFactory(mcp_client)
+tool_cache = ToolCache(mcp_client)
+provider_factory = ProviderFactory(mcp_client, tool_cache)
 
 app = FastAPI()
 
@@ -111,12 +113,12 @@ async def get_chat(model: str, system: str | None = None) -> McpToolChat:
     # Get the system prompt
     if not system:
         if (model_config.template):
-            async with mcp_client:
-                system = render_system_prompt(
-                    f"{model_config.template}.j2",
-                    await mcp_client.list_tools()
-                )
+            tools = await tool_cache.get_tools()
+            system = render_system_prompt(
+                f"{model_config.template}.j2",
+                tools
+            )
         else:
             system = default_system_prompt
 
-    return McpToolChat(mcp_client, provider, system)
+    return McpToolChat(mcp_client, provider, system, tool_cache=tool_cache)

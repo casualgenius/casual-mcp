@@ -12,6 +12,7 @@ from casual_mcp.models.messages import (
 )
 from casual_mcp.models.tool_call import AssistantToolCall
 from casual_mcp.providers.provider_factory import LLMProvider
+from casual_mcp.tool_cache import ToolCache
 from casual_mcp.utils import format_tool_call_result
 
 logger = get_logger("mcp_tool_chat")
@@ -37,10 +38,18 @@ def add_messages_to_session(session_id: str, messages: list[ChatMessage]):
 
 
 class McpToolChat:
-    def __init__(self, mcp_client: Client, provider: LLMProvider, system: str = None):
+    def __init__(
+        self,
+        mcp_client: Client,
+        provider: LLMProvider,
+        system: str = None,
+        tool_cache: ToolCache | None = None,
+    ):
         self.provider = provider
         self.mcp_client = mcp_client
         self.system = system
+        self.tool_cache = tool_cache or ToolCache(mcp_client)
+        self._tool_cache_version = -1
 
     @staticmethod
     def get_session(session_id) -> list[ChatMessage] | None:
@@ -80,6 +89,12 @@ class McpToolChat:
         self,
         messages: list[ChatMessage]
     ) -> list[ChatMessage]:
+        tools = await self.tool_cache.get_tools()
+        if self.tool_cache.version != self._tool_cache_version:
+            logger.debug("Refreshing provider tool catalogue")
+            self.provider.update_tools(tools)
+            self._tool_cache_version = self.tool_cache.version
+
         # Add a system message if required
         has_system_message = any(message.role == 'system' for message in messages)
         if self.system and not has_system_message:
@@ -88,9 +103,6 @@ class McpToolChat:
             messages.insert(0, SystemMessage(content=self.system))
 
         logger.info("Start Chat")
-        async with self.mcp_client:
-            tools = await self.mcp_client.list_tools()
-
         response_messages: list[ChatMessage] = []
         while True:
             logger.info("Calling the LLM")

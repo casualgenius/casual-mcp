@@ -13,3 +13,10 @@ class CasualMcpProvider(ABC):
         tools: list[mcp.Tool]
     ) -> ChatMessage:
         pass
+
+    def update_tools(self, tools: list[mcp.Tool]) -> None:
+        """
+        Allow providers to refresh their tool catalogue when it changes.
+        Default implementation is a no-op for providers that do not need it.
+        """
+        return None

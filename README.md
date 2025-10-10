@@ -193,9 +193,11 @@ Orchestrates LLM interaction with tools using a recursive loop.
 
 ```python
 from casual_mcp import McpToolChat
+from casual_mcp.tool_cache import ToolCache
 from casual_mcp.models import SystemMessage, UserMessage
 
-chat = McpToolChat(mcp_client, provider, system_prompt)
+tool_cache = ToolCache(mcp_client)
+chat = McpToolChat(mcp_client, provider, system_prompt, tool_cache=tool_cache)
 
 # Generate method to take user prompt
 response = await chat.generate("What time is it in London?")
@@ -205,7 +207,7 @@ response = await chat.generate("What time is it in London?", "my-session-id")
 
 # Chat method that takes list of chat messages 
 # note: system prompt ignored if sent in messages so no need to set
-chat = McpToolChat(mcp_client, provider) 
+chat = McpToolChat(mcp_client, provider, tool_cache=tool_cache)
 messages = [
   SystemMessage(content="You are a cool dude who likes to help the user"),
   UserMessage(content="What time is it in London?")
@@ -219,9 +221,11 @@ Instantiates LLM providers based on the selected model config.
 ```python
 from casual_mcp import ProviderFactory
 
-provider_factory = ProviderFactory(mcp_client)
+provider_factory = ProviderFactory(mcp_client, tool_cache=tool_cache)
 provider = await provider_factory.get_provider("lm-qwen-3", model_config)
 ```
+
+> ℹ️ Tool catalogues are cached to avoid repeated `ListTools` calls. The cache refreshes every 30 seconds by default. Override this with the `MCP_TOOL_CACHE_TTL` environment variable (set to `0` or a negative value to cache indefinitely).
 
 #### `load_config`
 Loads your `casual_mcp_config.json` into a validated config object.
