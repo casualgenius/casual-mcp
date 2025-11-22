@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import mcp
@@ -12,15 +13,87 @@ from casual_mcp.providers.abstract_provider import CasualMcpProvider
 logger = get_logger("providers.ollama")
 
 def convert_tools(mcp_tools: list[mcp.Tool]) -> list[ollama.Tool]:
-    raise Exception({"message": "under development"})
+    """Convert MCP tools to Ollama-compatible tools."""
+    logger.info("Converting MCP tools to Ollama format")
+
+    tools: list[ollama.Tool] = []
+
+    for mcp_tool in mcp_tools:
+        if mcp_tool.name and mcp_tool.description:
+            tool = ollama.Tool(
+                function=ollama.Tool.Function(
+                    name=mcp_tool.name,
+                    description=mcp_tool.description,
+                    parameters=ollama.Tool.Function.Parameters(
+                        properties=mcp_tool.inputSchema.get("properties", {}),
+                        required=mcp_tool.inputSchema.get("required", []),
+                    ),
+                )
+            )
+            tools.append(tool)
+        else:
+            logger.warning(
+                f"Tool missing attributes: name={mcp_tool.name}, description={mcp_tool.description}"
+            )
+
+    return tools
 
 
 def convert_messages(messages: list[ChatMessage]) -> list[ollama.Message]:
-    raise Exception({"message": "under development"})
+    """Convert ChatMessage objects to Ollama messages."""
+    if not messages:
+        return messages
+
+    logger.info("Converting messages to Ollama format")
+
+    ollama_messages: list[ollama.Message] = []
+    for msg in messages:
+        match msg.role:
+            case "assistant":
+                tool_calls = None
+                if msg.tool_calls:
+                    tool_calls = []
+                    for tool_call in msg.tool_calls:
+                        tool_calls.append(
+                            ollama.Message.ToolCall(
+                                function=ollama.Message.ToolCall.Function(
+                                    name=tool_call.function.name,
+                                    arguments=json.loads(tool_call.function.arguments),
+                                )
+                            )
+                        )
+                ollama_messages.append(
+                    ollama.Message(role="assistant", content=msg.content, tool_calls=tool_calls)
+                )
+            case "system":
+                ollama_messages.append(ollama.Message(role="system", content=msg.content))
+            case "tool":
+                ollama_messages.append(ollama.Message(role="tool", content=msg.content))
+            case "user":
+                ollama_messages.append(ollama.Message(role="user", content=msg.content))
+
+    return ollama_messages
 
 
 def convert_tool_calls(response_tool_calls: list[ollama.Message.ToolCall]) -> list[dict[str, Any]]:
-    raise Exception({"message": "under development"})
+    """Convert Ollama tool calls into a format used by the application."""
+    tool_calls = []
+
+    for i, tool in enumerate(response_tool_calls):
+        logger.debug(f"Convert Tool Call: {tool}")
+
+        tool_calls.append(
+            {
+                "id": str(i),
+                "type": "function",
+                "function": {
+                    "name": tool.function.name,
+                    "arguments": json.dumps(tool.function.arguments),
+                },
+            }
+        )
+
+    return tool_calls
 
 
 class OllamaProvider(CasualMcpProvider):
