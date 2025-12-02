@@ -1,17 +1,17 @@
 import json
 import os
 
-from fastmcp import Client
-
-from casual_mcp.logging import get_logger
-from casual_mcp.models.messages import (
+from casual_llm import (
+    AssistantToolCall,
     ChatMessage,
     SystemMessage,
     ToolResultMessage,
     UserMessage,
 )
-from casual_mcp.models.tool_call import AssistantToolCall
-from casual_mcp.providers.provider_factory import LLMProvider
+from fastmcp import Client
+
+from casual_mcp.logging import get_logger
+from casual_mcp.providers.provider_factory import CasualMcpProvider
 from casual_mcp.tool_cache import ToolCache
 from casual_mcp.utils import format_tool_call_result
 
@@ -41,7 +41,7 @@ class McpToolChat:
     def __init__(
         self,
         mcp_client: Client,
-        provider: LLMProvider,
+        provider: CasualMcpProvider,
         system: str = None,
         tool_cache: ToolCache | None = None,
     ):
@@ -99,7 +99,7 @@ class McpToolChat:
         has_system_message = any(message.role == 'system' for message in messages)
         if self.system and not has_system_message:
             # Insert the system message at the start of the messages
-            logger.debug(f"Adding System Message")
+            logger.debug("Adding System Message")
             messages.insert(0, SystemMessage(content=self.system))
 
         logger.info("Start Chat")
@@ -112,6 +112,8 @@ class McpToolChat:
             response_messages.append(ai_message)
             messages.append(ai_message)
 
+            print("Assistant:")
+            print(ai_message)
             if not ai_message.tool_calls:
                 break
 

@@ -2,13 +2,13 @@ import os
 import sys
 from pathlib import Path
 
+from casual_llm import ChatMessage
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
-from casual_mcp.models.messages import ChatMessage
 from casual_mcp.providers.provider_factory import ProviderFactory
 from casual_mcp.tool_cache import ToolCache
 from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt

@@ -1,18 +1,43 @@
 import os
-from typing import TypeAlias
 
 import mcp
+from casual_llm import (
+    AssistantMessage,
+    ChatMessage,
+    LLMProvider,
+    ModelConfig,
+    Provider,
+    create_provider,
+)
 from fastmcp import Client
 
+from casual_mcp.convert_tools import tools_from_mcp
 from casual_mcp.logging import get_logger
-from casual_mcp.models.model_config import ModelConfig
-from casual_mcp.providers.ollama_provider import OllamaProvider
-from casual_mcp.providers.openai_provider import OpenAiProvider
+from casual_mcp.models.model_config import McpModelConfig
 from casual_mcp.tool_cache import ToolCache
 
 logger = get_logger("providers.factory")
 
-LLMProvider: TypeAlias = OpenAiProvider | OllamaProvider
+class CasualMcpProvider:
+    def __init__(self, provider: LLMProvider, tools: list[mcp.Tool]):
+        self.provider = provider
+        self.tools = tools_from_mcp(tools)
+
+    async def generate(
+        self,
+        messages: list[ChatMessage],
+        tools: list[mcp.Tool]
+    ) -> AssistantMessage:
+        # print(self.tools)
+        return await self.provider.chat(messages=messages, tools=self.tools)
+
+    def update_tools(self, tools: list[mcp.Tool]) -> None:
+        """
+        Allow providers to refresh their tool catalogue when it changes.
+        Default implementation is a no-op for providers that do not need it.
+        """
+        self.tools = tools_from_mcp(tools)
+
 
 class ProviderFactory:
     def __init__(self, mcp_client: Client, tool_cache: ToolCache | None = None):
@@ -29,7 +54,7 @@ class ProviderFactory:
         self._tool_cache_version = self.tool_cache.version
 
 
-    async def get_provider(self, name: str, config: ModelConfig) -> LLMProvider:
+    async def get_provider(self, name: str, config: McpModelConfig) -> CasualMcpProvider:
         tools = await self.tool_cache.get_tools()
         if self.tool_cache.version != self._tool_cache_version:
             logger.info("Tool cache refreshed; updating providers")
@@ -41,24 +66,28 @@ class ProviderFactory:
         if self.providers.get(name):
             return self.providers.get(name)
 
-        match config.provider:
-            case "ollama":
-                logger.info(f"Creating Ollama provider for {config.model} at {config.endpoint}")
-                provider = OllamaProvider(config.model, endpoint=config.endpoint.__str__())
 
-            case "openai":
-                endpoint = None
-                if config.endpoint:
-                    endpoint = config.endpoint.__str__()
+        if (config.provider == "openai"):
+            provider = Provider.OPENAI
+        elif (config.provider == "ollama"):
+            provider = Provider.OLLAMA
+        else:
+            raise ValueError(f"Unknown provider: {config.provider}")
 
-                logger.info(f"Creating OpenAI provider for {config.model} at {endpoint}")
-                api_key = os.getenv("OPEN_AI_API_KEY")
-                provider = OpenAiProvider(
-                    config.model,
-                    api_key,
-                    tools,
-                    endpoint=endpoint,
-                )
 
+        # Use casual-llm create provider
+        llm_provider = create_provider(
+            ModelConfig(
+                provider=provider,
+                name=config.model,
+                base_url=config.endpoint,
+                api_key=os.getenv("OPEN_AI_API_KEY")
+            )
+        )
+
+        # create the casual mcp provider
+        provider = CasualMcpProvider(llm_provider, tools)
+
+        # add to providers and return
         self.providers[name] = provider
         return provider
