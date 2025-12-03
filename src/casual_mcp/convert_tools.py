@@ -5,6 +5,7 @@ from casual_mcp.logging import get_logger
 
 logger = get_logger("convert_tools")
 
+
 # MCP format converters (for interop with MCP libraries)
 def tool_from_mcp(mcp_tool: mcp.Tool) -> Tool:
     """
@@ -36,9 +37,7 @@ def tool_from_mcp(mcp_tool: mcp.Tool) -> Tool:
         input_schema = {}
 
     return Tool.from_input_schema(
-        name=mcp_tool.name,
-        description=mcp_tool.description,
-        input_schema=input_schema
+        name=mcp_tool.name, description=mcp_tool.description, input_schema=input_schema
     )
 
 
@@ -57,7 +56,7 @@ def tools_from_mcp(mcp_tools: list[mcp.Tool]) -> list[Tool]:
         >>> # assert len(tools) == len(mcp_tool_list)
         pass
     """
-#    logger.debug(f"Converting {len(mcp_tools)} MCP tools to casual-llm format")
+    #    logger.debug(f"Converting {len(mcp_tools)} MCP tools to casual-llm format")
     tools = []
 
     for mcp_tool in mcp_tools:

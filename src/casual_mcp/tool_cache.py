@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import mcp
 from fastmcp import Client
@@ -49,10 +50,10 @@ class ToolCache:
     number disables expiry (cache forever unless manually invalidated).
     """
 
-    def __init__(self, client: Client, ttl_seconds: float | None = None):
+    def __init__(self, client: Client[Any], ttl_seconds: float | None = None):
         self._client = client
-        self._ttl = ttl_seconds if ttl_seconds is not None else _parse_ttl(
-            os.getenv("MCP_TOOL_CACHE_TTL")
+        self._ttl = (
+            ttl_seconds if ttl_seconds is not None else _parse_ttl(os.getenv("MCP_TOOL_CACHE_TTL"))
         )
         self._state: _ToolCacheState | None = None
         self._lock = asyncio.Lock()
@@ -71,11 +72,11 @@ class ToolCache:
         """
         Return the cached tool list, refreshing if expired or forced.
         """
-        if not force_refresh and not self._is_expired():
+        if not force_refresh and not self._is_expired() and self._state is not None:
             return self._state.tools
 
         async with self._lock:
-            if not force_refresh and not self._is_expired():
+            if not force_refresh and not self._is_expired() and self._state is not None:
                 return self._state.tools
 
             logger.debug("Refreshing MCP tool cache")
@@ -90,13 +91,13 @@ class ToolCache:
 
             return tools
 
-    def invalidate(self):
+    def invalidate(self) -> None:
         """
         Manually clear the cached tools. The next get_tools call will refetch.
         """
         self._state = None
 
-    def prime(self, tools: list[mcp.Tool]):
+    def prime(self, tools: list[mcp.Tool]) -> None:
         """
         Seed the cache with a known tool list without making a network call.
         """

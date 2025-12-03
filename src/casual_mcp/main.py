@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 from casual_llm import ChatMessage
 from dotenv import load_dotenv
@@ -9,20 +10,21 @@ from pydantic import BaseModel, Field
 
 from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
-from casual_mcp.providers.provider_factory import ProviderFactory
+from casual_mcp.provider_factory import ProviderFactory
 from casual_mcp.tool_cache import ToolCache
 from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
 
+# Load environment variables
 load_dotenv()
 
 # Configure logging
-configure_logging(os.getenv("LOG_LEVEL", 'INFO'))
+configure_logging(cast(str, os.getenv("LOG_LEVEL", "INFO")))  # type: ignore[arg-type]
 logger = get_logger("main")
 
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 tool_cache = ToolCache(mcp_client)
-provider_factory = ProviderFactory(mcp_client, tool_cache)
+provider_factory = ProviderFactory()
 
 app = FastAPI()
 
@@ -41,63 +43,39 @@ Always present information as current and factual.
 
 
 class GenerateRequest(BaseModel):
-    session_id: str | None = Field(
-        default=None, title="Session to use"
-    )
-    model: str = Field(
-        title="Model to user"
-    )
-    system_prompt: str | None = Field(
-        default=None, title="System Prompt to use"
-    )
-    prompt: str = Field(
-        title="User Prompt"
-    )
+    session_id: str | None = Field(default=None, title="Session to use")
+    model: str = Field(title="Model to user")
+    system_prompt: str | None = Field(default=None, title="System Prompt to use")
+    prompt: str = Field(title="User Prompt")
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(
-        title="Model to user"
-    )
-    system_prompt: str | None = Field(
-        default=None, title="System Prompt to use"
-    )
-    messages: list[ChatMessage] = Field(
-        title="Previous messages to supply to the LLM"
-    )
+    model: str = Field(title="Model to user")
+    system_prompt: str | None = Field(default=None, title="System Prompt to use")
+    messages: list[ChatMessage] = Field(title="Previous messages to supply to the LLM")
+
 
 sys.path.append(str(Path(__file__).parent.resolve()))
 
 
-
-
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest) -> dict[str, Any]:
     chat = await get_chat(req.model, req.system_prompt)
     messages = await chat.chat(req.messages)
 
-    return {
-        "messages": messages,
-        "response": messages[len(messages) - 1].content
-    }
+    return {"messages": messages, "response": messages[len(messages) - 1].content}
 
 
 @app.post("/generate")
-async def generate(req: GenerateRequest):
+async def generate(req: GenerateRequest) -> dict[str, Any]:
     chat = await get_chat(req.model, req.system_prompt)
-    messages = await chat.generate(
-        req.prompt,
-        req.session_id
-    )
+    messages = await chat.generate(req.prompt, req.session_id)
 
-    return {
-        "messages": messages,
-        "response": messages[len(messages) - 1].content
-    }
+    return {"messages": messages, "response": messages[len(messages) - 1].content}
 
 
 @app.get("/generate/session/{session_id}")
-async def get_generate_session(session_id):
+async def get_generate_session(session_id: str) -> list[ChatMessage]:
     session = McpToolChat.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -112,12 +90,9 @@ async def get_chat(model: str, system: str | None = None) -> McpToolChat:
 
     # Get the system prompt
     if not system:
-        if (model_config.template):
+        if model_config.template:
             tools = await tool_cache.get_tools()
-            system = render_system_prompt(
-                f"{model_config.template}.j2",
-                tools
-            )
+            system = render_system_prompt(f"{model_config.template}.j2", tools)
         else:
             system = default_system_prompt
 

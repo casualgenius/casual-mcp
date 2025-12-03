@@ -14,6 +14,7 @@ from .mcp_server_config import (
 )
 from .model_config import (
     McpModelConfig,
+    OllamaModelConfig,
     OpenAIModelConfig,
 )
 
@@ -25,6 +26,7 @@ __all__ = [
     "SystemMessage",
     "ChatMessage",
     "McpModelConfig",
+    "OllamaModelConfig",
     "OpenAIModelConfig",
     "McpServerConfig",
     "StdioServerConfig",

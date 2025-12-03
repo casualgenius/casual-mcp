@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import mcp
 from casual_llm import AssistantToolCall
@@ -10,11 +11,8 @@ from pydantic import ValidationError
 from casual_mcp.models.config import Config
 
 
-def load_mcp_client(config: Config) -> Client:
-    servers = {
-        key: value.model_dump()
-        for key, value in config.servers.items()
-    }
+def load_mcp_client(config: Config) -> Client[Any]:
+    servers = {key: value.model_dump() for key, value in config.servers.items()}
     return Client(servers)
 
 
@@ -34,12 +32,13 @@ def load_config(path: str | Path) -> Config:
     except json.JSONDecodeError as je:
         raise ValueError(f"Could not parse config JSON:\n{je}") from je
 
+
 def format_tool_call_result(
     tool_call: AssistantToolCall,
     result: str,
     style: str = "function_result",
-    include_id: bool = False
-    ) -> str:
+    include_id: bool = False,
+) -> str:
     """
     Format a tool call and result into a prompt-friendly string.
 
@@ -75,13 +74,15 @@ def format_tool_call_result(
     else:
         raise ValueError(f"Unsupported style: {style}")
 
-    if (include_id):
+    if include_id:
         return f"ID: {tool_call.id}\n{result_str}"
 
     return result_str
 
 
-def render_system_prompt(template_name: str, tools: list[mcp.Tool], extra: dict = None) -> str:
+def render_system_prompt(
+    template_name: str, tools: list[mcp.Tool], extra: dict[str, Any] | None = None
+) -> str:
     """
     Renders a system prompt template with tool definitions.
 
