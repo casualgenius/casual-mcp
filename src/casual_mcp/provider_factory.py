@@ -17,25 +17,27 @@ class ProviderFactory:
     def __init__(self) -> None:
         self.providers: dict[str, LLMProvider] = {}
 
-    async def get_provider(self, name: str, config: McpModelConfig) -> LLMProvider:
+    def get_provider(self, name: str, config: McpModelConfig) -> LLMProvider:
         existing = self.providers.get(name)
         if existing:
             return existing
 
-        if config.provider == "openai":
-            provider = Provider.OPENAI
-        elif config.provider == "ollama":
-            provider = Provider.OLLAMA
-        else:
+        provider_map = {
+            "openai": Provider.OPENAI,
+            "ollama": Provider.OLLAMA,
+        }
+        provider = provider_map.get(config.provider)
+        if provider is None:
             raise ValueError(f"Unknown provider: {config.provider}")
 
         # Use casual-llm create provider
+        api_key = os.getenv("OPENAI_API_KEY") if provider == Provider.OPENAI else None
         llm_provider = create_provider(
             ModelConfig(
                 provider=provider,
                 name=config.model,
                 base_url=config.endpoint,
-                api_key=os.getenv("OPENAI_API_KEY"),
+                api_key=api_key,
             )
         )
 

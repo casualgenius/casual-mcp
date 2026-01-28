@@ -102,33 +102,33 @@ class TestToolCache:
         # Should only call list_tools once
         assert mock_client.list_tools.call_count == 1
 
-    def test_invalidate_clears_cache(self, mock_client):
+    async def test_invalidate_clears_cache(self, mock_client):
         """Test that invalidate clears the cache."""
         cache = ToolCache(mock_client, ttl_seconds=30)
-        cache.prime([Mock(name="tool1")])
+        await cache.prime([Mock(name="tool1")])
 
         assert cache._state is not None
         cache.invalidate()
         assert cache._state is None
 
-    def test_prime_sets_cache(self, mock_client, mock_tools):
+    async def test_prime_sets_cache(self, mock_client, mock_tools):
         """Test that prime sets the cache without network call."""
         cache = ToolCache(mock_client, ttl_seconds=30)
 
-        cache.prime(mock_tools)
+        await cache.prime(mock_tools)
 
         assert cache._state is not None
         assert len(cache._state.tools) == 2
         assert cache.version == 1
 
-    def test_version_increments_on_refresh(self, mock_client, mock_tools):
+    async def test_version_increments_on_refresh(self, mock_client, mock_tools):
         """Test that version increments when cache refreshes."""
         cache = ToolCache(mock_client, ttl_seconds=30)
 
         assert cache.version == 0
-        cache.prime(mock_tools)
+        await cache.prime(mock_tools)
         assert cache.version == 1
-        cache.prime(mock_tools)
+        await cache.prime(mock_tools)
         assert cache.version == 2
 
     @patch.dict("os.environ", {"MCP_TOOL_CACHE_TTL": "60"})

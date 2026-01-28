@@ -238,7 +238,7 @@ Instantiates LLM providers (from casual-llm) based on the selected model config.
 from casual_mcp import ProviderFactory
 
 provider_factory = ProviderFactory()
-provider = await provider_factory.get_provider("lm-qwen-3", model_config)
+provider = provider_factory.get_provider("lm-qwen-3", model_config)
 ```
 
 The factory returns an `LLMProvider` from casual-llm that can be used with `McpToolChat`.
@@ -323,7 +323,7 @@ mcp_client = load_mcp_client(config)
 
 # Get the Provider for the Model
 provider_factory = ProviderFactory()
-provider = await provider_factory.get_provider(model, config.models[model])
+provider = provider_factory.get_provider(model, config.models[model])
 
 # Perform the Chat and Tool calling
 chat = McpToolChat(mcp_client, provider)

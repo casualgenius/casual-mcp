@@ -56,7 +56,6 @@ def tools_from_mcp(mcp_tools: list[mcp.Tool]) -> list[Tool]:
         >>> # assert len(tools) == len(mcp_tool_list)
         pass
     """
-    #    logger.debug(f"Converting {len(mcp_tools)} MCP tools to casual-llm format")
     tools = []
 
     for mcp_tool in mcp_tools:

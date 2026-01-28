@@ -101,26 +101,24 @@ class McpToolChat:
             response_messages.append(ai_message)
             messages.append(ai_message)
 
-            print("Assistant:")
-            print(ai_message)
+            logger.debug(f"Assistant: {ai_message}")
             if not ai_message.tool_calls:
                 break
 
-            if ai_message.tool_calls and len(ai_message.tool_calls) > 0:
-                logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
-                result_count = 0
-                for tool_call in ai_message.tool_calls:
-                    try:
-                        result = await self.execute(tool_call)
-                    except Exception as e:
-                        logger.error(e)
-                        return messages
-                    if result:
-                        messages.append(result)
-                        response_messages.append(result)
-                        result_count = result_count + 1
+            logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
+            result_count = 0
+            for tool_call in ai_message.tool_calls:
+                try:
+                    result = await self.execute(tool_call)
+                except Exception as e:
+                    logger.error(e)
+                    return messages
+                if result:
+                    messages.append(result)
+                    response_messages.append(result)
+                    result_count = result_count + 1
 
-                logger.info(f"Added {result_count} tool results")
+            logger.info(f"Added {result_count} tool results")
 
         logger.debug(f"Final Response: {response_messages[-1].content}")
 
@@ -148,12 +146,15 @@ class McpToolChat:
 
         result_format = os.getenv("TOOL_RESULT_FORMAT", "result")
         # Extract text content from result (handle both TextContent and other content types)
-        content_item = result.content[0]
-        if hasattr(content_item, "text"):
-            content_text = content_item.text
+        if not result.content:
+            content_text = "[No content returned]"
         else:
-            # Handle non-text content (e.g., ImageContent)
-            content_text = f"[Non-text content: {type(content_item).__name__}]"
+            content_item = result.content[0]
+            if hasattr(content_item, "text"):
+                content_text = content_item.text
+            else:
+                # Handle non-text content (e.g., ImageContent)
+                content_text = f"[Non-text content: {type(content_item).__name__}]"
         content = format_tool_call_result(tool_call, content_text, style=result_format)
 
         return ToolResultMessage(

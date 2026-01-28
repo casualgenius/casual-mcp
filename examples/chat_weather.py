@@ -34,7 +34,7 @@ async def main():
 
     model_config = config.models[MODEL_NAME]
     provider_factory = ProviderFactory()
-    provider = await provider_factory.get_provider(MODEL_NAME, model_config)
+    provider = provider_factory.get_provider(MODEL_NAME, model_config)
 
     print(f"Model: {MODEL_NAME} ({model_config.provider})")
 

@@ -59,7 +59,13 @@ def format_tool_call_result(
         str: Formatted content string
     """
     func_name = tool_call.function.name
-    args = json.loads(tool_call.function.arguments)
+    try:
+        args = json.loads(tool_call.function.arguments)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"Malformed JSON in tool call arguments for '{func_name}': {e}. "
+            f"Payload: {tool_call.function.arguments!r}"
+        ) from e
 
     if style == "result":
         result_str = result

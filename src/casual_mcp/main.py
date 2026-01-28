@@ -1,7 +1,6 @@
 import os
-import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from casual_llm import ChatMessage
 from dotenv import load_dotenv
@@ -18,7 +17,7 @@ from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
 load_dotenv()
 
 # Configure logging
-configure_logging(cast(str, os.getenv("LOG_LEVEL", "INFO")))  # type: ignore[arg-type]
+configure_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = get_logger("main")
 
 config = load_config("casual_mcp_config.json")
@@ -44,18 +43,15 @@ Always present information as current and factual.
 
 class GenerateRequest(BaseModel):
     session_id: str | None = Field(default=None, title="Session to use")
-    model: str = Field(title="Model to user")
+    model: str = Field(title="Model to use")
     system_prompt: str | None = Field(default=None, title="System Prompt to use")
     prompt: str = Field(title="User Prompt")
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(title="Model to user")
+    model: str = Field(title="Model to use")
     system_prompt: str | None = Field(default=None, title="System Prompt to use")
     messages: list[ChatMessage] = Field(title="Previous messages to supply to the LLM")
-
-
-sys.path.append(str(Path(__file__).parent.resolve()))
 
 
 @app.post("/chat")
@@ -63,7 +59,7 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
     chat = await get_chat(req.model, req.system_prompt)
     messages = await chat.chat(req.messages)
 
-    return {"messages": messages, "response": messages[len(messages) - 1].content}
+    return {"messages": messages, "response": messages[-1].content}
 
 
 @app.post("/generate")
@@ -71,7 +67,7 @@ async def generate(req: GenerateRequest) -> dict[str, Any]:
     chat = await get_chat(req.model, req.system_prompt)
     messages = await chat.generate(req.prompt, req.session_id)
 
-    return {"messages": messages, "response": messages[len(messages) - 1].content}
+    return {"messages": messages, "response": messages[-1].content}
 
 
 @app.get("/generate/session/{session_id}")
@@ -86,7 +82,7 @@ async def get_generate_session(session_id: str) -> list[ChatMessage]:
 async def get_chat(model: str, system: str | None = None) -> McpToolChat:
     # Get Provider from Model Config
     model_config = config.models[model]
-    provider = await provider_factory.get_provider(model, model_config)
+    provider = provider_factory.get_provider(model, model_config)
 
     # Get the system prompt
     if not system:

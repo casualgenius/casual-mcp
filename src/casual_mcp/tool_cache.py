@@ -97,15 +97,16 @@ class ToolCache:
         """
         self._state = None
 
-    def prime(self, tools: list[mcp.Tool]) -> None:
+    async def prime(self, tools: list[mcp.Tool]) -> None:
         """
         Seed the cache with a known tool list without making a network call.
         """
-        self._state = _ToolCacheState(
-            tools=tools,
-            fetched_at=time.monotonic(),
-        )
-        self._version += 1
+        async with self._lock:
+            self._state = _ToolCacheState(
+                tools=tools,
+                fetched_at=time.monotonic(),
+            )
+            self._version += 1
 
     @property
     def version(self) -> int:

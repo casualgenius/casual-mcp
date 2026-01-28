@@ -32,9 +32,9 @@ def servers() -> None:
     table = Table("Name", "Type", "Command / Url", "Env")
 
     for name, server in config.servers.items():
-        type = "stdio"
+        server_type = "stdio"
         if isinstance(server, RemoteServerConfig):
-            type = "remote"
+            server_type = "remote"
 
         path = ""
         if isinstance(server, RemoteServerConfig):
@@ -43,7 +43,7 @@ def servers() -> None:
             path = f"{server.command} {' '.join(server.args)}"
         env = ""
 
-        table.add_row(name, type, path, env)
+        table.add_row(name, server_type, path, env)
 
     console.print(table)
 
@@ -57,10 +57,7 @@ def models() -> None:
     table = Table("Name", "Provider", "Model", "Endpoint")
 
     for name, model in config.models.items():
-        endpoint = ""
-        if model.provider == "openai":
-            endpoint = model.endpoint or ""
-
+        endpoint = model.endpoint or ""
         table.add_row(name, model.provider, model.model, str(endpoint))
 
     console.print(table)
