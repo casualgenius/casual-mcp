@@ -75,7 +75,7 @@ jobs:
 
           # If nothing found, use a generic message
           if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="Release version $VERSION. See [CHANGELOG.md](https://github.com/AlexStansfield/casual-mcp/blob/main/CHANGELOG.md) for details."
+            CHANGELOG="Release version $VERSION. See [CHANGELOG.md](https://github.com/casualgenius/casual-mcp/blob/main/CHANGELOG.md) for details."
           fi
 
           # Save to file for use in release notes

@@ -24,9 +24,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/AlexStansfield/casual-mcp"
-"Repository" = "https://github.com/AlexStansfield/casual-mcp"
-"Issue Tracker" = "https://github.com/AlexStansfield/casual-mcp/issues"
+"Homepage" = "https://github.com/casualgenius/casual-mcp"
+"Repository" = "https://github.com/casualgenius/casual-mcp"
+"Issue Tracker" = "https://github.com/casualgenius/casual-mcp/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

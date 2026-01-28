@@ -38,7 +38,7 @@ pip install casual-mcp
 Or for development:
 
 ```bash
-git clone https://github.com/AlexStansfield/casual-mcp.git
+git clone https://github.com/casualgenius/casual-mcp.git
 cd casual-mcp
 uv sync --group dev
 ```
