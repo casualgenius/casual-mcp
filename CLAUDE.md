@@ -10,23 +10,28 @@ Casual MCP is a Python framework for building, evaluating, and serving LLMs with
 
 Install for development:
 ```bash
-uv pip install -e ".[dev]"
+uv sync --group dev
 ```
 
 Run linting:
 ```bash
-make lint          # Check code
-make lint-fix      # Auto-fix issues
+uv run ruff check src/        # Check code
+uv run ruff check --fix src/  # Auto-fix issues
 ```
 
 Format code:
 ```bash
-make format        # Using ruff
+uv run ruff format src/
 ```
 
 Type checking:
 ```bash
-make typecheck     # Using mypy
+uv run mypy src/
+```
+
+Run tests:
+```bash
+uv run pytest tests/
 ```
 
 Run the CLI:

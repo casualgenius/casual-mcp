@@ -3,23 +3,19 @@
         "ollama-llama3.1": {
             "provider": "ollama",
             "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "llama3.1"
+            "model": "llama3.1",
+            "template": "ollama-tools"
         },
-        "ollama-phi-4-mini": {
+        "ollama-qwen2.5-7b-instruct": {
             "provider": "ollama",
             "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "phi4-tools"
+            "model": "qwen2.5:7b-instruct"
         },
-        "ollama-qwen2.5": {
+        "ollama-qwen2.5-7b-instruct-with-template": {
             "provider": "ollama",
             "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "qwen2.5"
-        },
-        "lm-phi-4-mini": {
-            "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "phi-4-mini-instruct",
-            "template": "phi-4-mini-instruct-1"
+            "model": "qwen2.5:7b-instruct",
+            "template": "ollama-tools"
         },
         "gpt-5": {
             "provider": "openai",

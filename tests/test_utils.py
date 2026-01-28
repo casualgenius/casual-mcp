@@ -17,9 +17,7 @@ class TestFormatToolCallResult:
         """Create a sample tool call."""
         return AssistantToolCall(
             id="call_123",
-            function=AssistantToolCallFunction(
-                name="get_weather", arguments='{"city": "London"}'
-            ),
+            function=AssistantToolCallFunction(name="get_weather", arguments='{"city": "London"}'),
         )
 
     def test_format_result_only(self, tool_call):
@@ -39,9 +37,7 @@ class TestFormatToolCallResult:
 
     def test_format_with_id(self, tool_call):
         """Test formatting with include_id=True."""
-        result = format_tool_call_result(
-            tool_call, "Sunny, 20°C", style="result", include_id=True
-        )
+        result = format_tool_call_result(tool_call, "Sunny, 20°C", style="result", include_id=True)
         assert result == "ID: call_123\nSunny, 20°C"
 
     def test_format_invalid_style(self, tool_call):

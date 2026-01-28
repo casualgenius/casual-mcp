@@ -160,9 +160,7 @@ class TestMcpToolChat:
         assert mock_provider.chat.call_count == 2
         assert len(response) >= 2  # At least assistant message and tool result
 
-    async def test_chat_stops_when_no_tool_calls(
-        self, mock_client, mock_provider, mock_tool_cache
-    ):
+    async def test_chat_stops_when_no_tool_calls(self, mock_client, mock_provider, mock_tool_cache):
         """Test that chat stops when LLM doesn't request tool calls."""
         mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Final response"))
 
@@ -176,9 +174,7 @@ class TestMcpToolChat:
         assert len(response) == 1
         assert response[0].content == "Final response"
 
-    async def test_generate_creates_user_message(
-        self, mock_client, mock_provider, mock_tool_cache
-    ):
+    async def test_generate_creates_user_message(self, mock_client, mock_provider, mock_tool_cache):
         """Test that generate creates a UserMessage from prompt."""
         mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 

@@ -23,6 +23,14 @@ It includes:
 
 ## 🔧 Installation
 
+### Uv
+
+```bash
+uv add casual-mcp
+```
+
+### Pip
+
 ```bash
 pip install casual-mcp
 ```
@@ -32,7 +40,7 @@ Or for development:
 ```bash
 git clone https://github.com/AlexStansfield/casual-mcp.git
 cd casual-mcp
-uv pip install -e .[dev]
+uv sync --group dev
 ```
 
 ## 🧩 System Prompt Templates

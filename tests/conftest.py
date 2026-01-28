@@ -19,9 +19,7 @@ def sample_config_data():
                 "endpoint": "http://localhost:11434",
             },
         },
-        "servers": {
-            "test-server": {"command": "python", "args": ["-m", "test_server"], "env": {}}
-        },
+        "servers": {"test-server": {"command": "python", "args": ["-m", "test_server"], "env": {}}},
     }
 
 
