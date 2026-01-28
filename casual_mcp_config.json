@@ -2,18 +2,17 @@
     "models": {
         "ollama-llama3.1": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "llama3.1",
-            "template": "ollama-tools"
+            "endpoint": "http://localhost:11434",
+            "model": "llama3.1:8b"
         },
         "ollama-qwen2.5-7b-instruct": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
+            "endpoint": "http://localhost:11434",
             "model": "qwen2.5:7b-instruct"
         },
         "ollama-qwen2.5-7b-instruct-with-template": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
+            "endpoint": "http://localhost:11434",
             "model": "qwen2.5:7b-instruct",
             "template": "ollama-tools"
         },

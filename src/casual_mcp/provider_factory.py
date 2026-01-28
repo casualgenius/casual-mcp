@@ -35,7 +35,7 @@ class ProviderFactory:
                 provider=provider,
                 name=config.model,
                 base_url=config.endpoint,
-                api_key=os.getenv("OPEN_AI_API_KEY"),
+                api_key=os.getenv("OPENAI_API_KEY"),
             )
         )
 

@@ -94,7 +94,7 @@ class TestProviderFactory:
         with pytest.raises(ValueError, match="Unknown provider: unknown"):
             await factory.get_provider("test", config)
 
-    @patch.dict("os.environ", {"OPEN_AI_API_KEY": "test-key"})
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"})
     @patch("casual_mcp.provider_factory.create_provider")
     async def test_get_provider_uses_api_key_from_env(self, mock_create, openai_config):
         """Test that API key is read from environment."""

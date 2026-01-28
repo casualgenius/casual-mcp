@@ -129,7 +129,7 @@ Sessions are stored in-memory in `mcp_tool_chat.py` and are cleared on server re
 ## Environment Variables
 
 **Required:**
-- `OPEN_AI_API_KEY` - Required for OpenAI provider (can be any string for local OpenAI-compatible APIs)
+- `OPENAI_API_KEY` - Required for OpenAI provider (can be any string for local OpenAI-compatible APIs)
 
 **Optional:**
 - `TOOL_RESULT_FORMAT` - Format for tool results: `result`, `function_result`, `function_args_result` (default: `result`)

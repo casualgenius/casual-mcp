@@ -142,7 +142,7 @@ Servers can either be local (over stdio) or remote.
 
 ## Environmental Variables
 
-- `OPEN_AI_API_KEY`: required when using the `openai` provider (can be any string when using local OpenAI-compatible APIs)
+- `OPENAI_API_KEY`: required when using the `openai` provider (can be any string when using local OpenAI-compatible APIs)
 - `TOOL_RESULT_FORMAT`: adjusts the format of tool results returned to the LLM
   - Options: `result`, `function_result`, `function_args_result`
   - Default: `result`
@@ -471,10 +471,10 @@ If you see errors about tools not being found:
 **OpenAI Provider:**
 ```bash
 # Ensure API key is set (even for local APIs)
-export OPEN_AI_API_KEY=your-key-here
+export OPENAI_API_KEY=your-key-here
 
 # For local OpenAI-compatible APIs (LM Studio, etc):
-export OPEN_AI_API_KEY=dummy-key  # Can be any string
+export OPENAI_API_KEY=dummy-key  # Can be any string
 ```
 
 **Ollama Provider:**
