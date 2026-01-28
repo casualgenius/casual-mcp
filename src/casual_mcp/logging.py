@@ -1,4 +1,5 @@
 import logging
+import fastmcp
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -26,4 +27,8 @@ def configure_logging(
         logger.removeHandler(hdlr)
 
     logger.addHandler(handler)
+
+    # Set logging level on FastMCP
+    fastmcp.utilities.logging.configure_logging(level=level)
+
     logger.info("Logging Configured")

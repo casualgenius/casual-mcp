@@ -1,5 +1,5 @@
 from typing import Annotated, Tuple, List, Dict
-from fastmcp import FastMCP
+from fastmcp import FastMCP, utilities
 from pydantic import Field
 import requests
 
@@ -135,4 +135,5 @@ def air_quality(location: Annotated[str, Field(description="City or place name")
     }
 
 if __name__ == "__main__":
+    utilities.logging.configure_logging(level="WARNING")
     mcp.run()

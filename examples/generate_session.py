@@ -15,7 +15,7 @@ from casual_mcp.provider_factory import ProviderFactory
 from casual_mcp.utils import load_config, load_mcp_client
 
 load_dotenv()
-configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))  # type: ignore
+configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))  # type: ignore
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
