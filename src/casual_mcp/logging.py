@@ -1,5 +1,4 @@
 import logging
-from typing import Literal
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -10,7 +9,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def configure_logging(
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | int = "INFO",
+    level: str | int = "INFO",
     logger: logging.Logger | None = None,
 ) -> None:
     if logger is None:
@@ -27,4 +26,9 @@ def configure_logging(
         logger.removeHandler(hdlr)
 
     logger.addHandler(handler)
+
+    # Set logging level on FastMCP and MCP libraries
+    logging.getLogger("fastmcp").setLevel(level)
+    logging.getLogger("mcp").setLevel(level)
+
     logger.info("Logging Configured")

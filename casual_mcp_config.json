@@ -2,24 +2,19 @@
     "models": {
         "ollama-llama3.1": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "llama3.1"
+            "endpoint": "http://localhost:11434",
+            "model": "llama3.1:8b"
         },
-        "ollama-phi-4-mini": {
+        "ollama-qwen2.5-7b-instruct": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "phi4-tools"
+            "endpoint": "http://localhost:11434",
+            "model": "qwen2.5:7b-instruct"
         },
-        "ollama-qwen2.5": {
+        "ollama-qwen2.5-7b-instruct-with-template": {
             "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:11434",
-            "model": "qwen2.5"
-        },
-        "lm-phi-4-mini": {
-            "provider": "ollama",
-            "endpoint": "http://kovacs.jinkies.net:1234/v1",
-            "model": "phi-4-mini-instruct",
-            "template": "phi-4-mini-instruct-1"
+            "endpoint": "http://localhost:11434",
+            "model": "qwen2.5:7b-instruct",
+            "template": "ollama-tools"
         },
         "gpt-5": {
             "provider": "openai",
@@ -52,16 +47,16 @@
             "args": ["mcp-servers/math/server.py"]
         },
         "time": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-time"]
+            "command": "python",
+            "args": ["mcp-servers/time-v2/server.py"]
         },
         "weather": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-weather"]
+            "command": "python",
+            "args": ["mcp-servers/weather/server.py"]
         },
         "words": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-words"]
+            "command": "python",
+            "args": ["mcp-servers/words/server.py"]
         },
         "fetch": {
             "command": "npx",

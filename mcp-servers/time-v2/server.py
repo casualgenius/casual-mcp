@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 from typing import Annotated
-from fastmcp import FastMCP
+from fastmcp import FastMCP, utilities
 from pydantic import Field
 import calendar
 
@@ -101,4 +101,5 @@ def parse_human_date(
     return parsed.date().isoformat()
 
 if __name__ == "__main__":
+    utilities.logging.configure_logging(level="WARNING")
     mcp.run()

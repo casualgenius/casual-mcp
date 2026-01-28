@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Build and Publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "Version: $TAG"
+
+      - name: Verify version consistency
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+
+          # Check pyproject.toml (single source of truth)
+          PYPROJECT_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+            echo "Error: pyproject.toml version ($PYPROJECT_VERSION) doesn't match tag ($VERSION)"
+            exit 1
+          fi
+
+          echo "✓ Version $VERSION matches pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run linting checks
+        run: |
+          uv run black --check src/ tests/ examples/
+          uv run ruff check src/ tests/ examples/
+
+      - name: Run type checks
+        run: uv run mypy src/casual_mcp
+
+      - name: Run tests
+        run: uv run pytest tests/ --cov=casual_mcp --cov-report=term
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+
+      - name: Extract CHANGELOG for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+
+          # Extract changelog section for this version
+          # Look for ## [VERSION] and capture until next ## or end of file
+          CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
+
+          # If nothing found, use a generic message
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="Release version $VERSION. See [CHANGELOG.md](https://github.com/casualgenius/casual-mcp/blob/main/CHANGELOG.md) for details."
+          fi
+
+          # Save to file for use in release notes
+          echo "$CHANGELOG" > /tmp/release_notes.md
+          echo "Release notes extracted"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/release_notes.md
+          files: dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

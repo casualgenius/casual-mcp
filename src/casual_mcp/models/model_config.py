@@ -1,12 +1,12 @@
 from typing import Literal
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 
 class BaseModelConfig(BaseModel):
     provider: Literal["openai", "ollama"]
     model: str
-    endpoint: HttpUrl | None = None
+    endpoint: str | None = None
     template: str | None = None
 
 
@@ -18,4 +18,4 @@ class OllamaModelConfig(BaseModelConfig):
     provider: Literal["ollama"]
 
 
-ModelConfig = OpenAIModelConfig | OllamaModelConfig
+McpModelConfig = OpenAIModelConfig | OllamaModelConfig
