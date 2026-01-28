@@ -1,7 +1,7 @@
 """
-Example: Generate with weather question.
+Example: Chat API with explicit message control.
 
-Demonstrates the simplest usage of McpToolChat.generate().
+Demonstrates McpToolChat.chat() with a custom message list.
 """
 
 import asyncio
@@ -9,13 +9,15 @@ import os
 
 from dotenv import load_dotenv
 
+from casual_llm import UserMessage, SystemMessage
+
 from casual_mcp.logging import configure_logging
 from casual_mcp.mcp_tool_chat import McpToolChat
 from casual_mcp.provider_factory import ProviderFactory
 from casual_mcp.utils import load_config, load_mcp_client
 
 load_dotenv()
-configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
+configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))  # type: ignore
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
@@ -34,20 +36,24 @@ async def main():
     provider_factory = ProviderFactory()
     provider = provider_factory.get_provider(MODEL_NAME, model_config)
 
-    print(f"Model: {MODEL_NAME} ({model_config.provider})")
 
     chat = McpToolChat(
         mcp_client=mcp_client,
         provider=provider,
     )
 
-    tools = await chat.tool_cache.get_tools()
-    print(f"Available tools: {len(tools)}")
+    # Build messages manually for full control
+    messages = [
+        SystemMessage(content="You are a webpage summariser, you will be given a url to fetch and then summarise the content and return it to the user."),
+        UserMessage(content="https://www.anthropic.com/news/model-context-protocol"),
+    ]
 
-    prompt = "What's the weather in Paris?"
-    print(f"\nUser: {prompt}\n")
+    response_messages = await chat.chat(messages)
 
-    response_messages = await chat.generate(prompt)
+    print(f"Model: {MODEL_NAME} ({model_config.provider})")
+    print("\nSummarise https://www.anthropic.com/news/model-context-protocol\n")
+    tool_count = sum(1 for m in response_messages if m.role == "tool")
+    print(f"\nResponse: {len(response_messages)} messages, {tool_count} tool results")
 
     for msg in reversed(response_messages):
         if msg.role == "assistant" and msg.content:

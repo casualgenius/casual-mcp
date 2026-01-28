@@ -14,6 +14,11 @@ logger = get_logger("providers.factory")
 
 
 class ProviderFactory:
+    PROVIDER_MAP = {
+        "openai": Provider.OPENAI,
+        "ollama": Provider.OLLAMA,
+    }
+
     def __init__(self) -> None:
         self.providers: dict[str, LLMProvider] = {}
 
@@ -22,11 +27,7 @@ class ProviderFactory:
         if existing:
             return existing
 
-        provider_map = {
-            "openai": Provider.OPENAI,
-            "ollama": Provider.OLLAMA,
-        }
-        provider = provider_map.get(config.provider)
+        provider = self.PROVIDER_MAP.get(config.provider)
         if provider is None:
             raise ValueError(f"Unknown provider: {config.provider}")
 

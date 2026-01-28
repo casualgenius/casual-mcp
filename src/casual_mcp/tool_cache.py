@@ -91,11 +91,12 @@ class ToolCache:
 
             return tools
 
-    def invalidate(self) -> None:
+    async def invalidate(self) -> None:
         """
         Manually clear the cached tools. The next get_tools call will refetch.
         """
-        self._state = None
+        async with self._lock:
+            self._state = None
 
     async def prime(self, tools: list[mcp.Tool]) -> None:
         """

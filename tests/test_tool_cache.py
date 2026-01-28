@@ -108,7 +108,7 @@ class TestToolCache:
         await cache.prime([Mock(name="tool1")])
 
         assert cache._state is not None
-        cache.invalidate()
+        await cache.invalidate()
         assert cache._state is None
 
     async def test_prime_sets_cache(self, mock_client, mock_tools):

@@ -111,8 +111,11 @@ class McpToolChat:
                 try:
                     result = await self.execute(tool_call)
                 except Exception as e:
-                    logger.error(e)
-                    return messages
+                    logger.error(
+                        f"Failed to execute tool '{tool_call.function.name}' "
+                        f"(id={tool_call.id}): {e}"
+                    )
+                    continue
                 if result:
                     messages.append(result)
                     response_messages.append(result)

@@ -47,16 +47,16 @@
             "args": ["mcp-servers/math/server.py"]
         },
         "time": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-time"]
+            "command": "python",
+            "args": ["mcp-servers/time-v2/server.py"]
         },
         "weather": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-weather"]
+            "command": "python",
+            "args": ["mcp-servers/weather/server.py"]
         },
         "words": {
-            "command": "uvx",
-            "args": ["casual-mcp-server-words"]
+            "command": "python",
+            "args": ["mcp-servers/words/server.py"]
         },
         "fetch": {
             "command": "npx",
