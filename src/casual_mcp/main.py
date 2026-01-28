@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Any
 
 from casual_llm import ChatMessage

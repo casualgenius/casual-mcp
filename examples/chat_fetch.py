@@ -36,7 +36,6 @@ async def main():
     provider_factory = ProviderFactory()
     provider = provider_factory.get_provider(MODEL_NAME, model_config)
 
-
     chat = McpToolChat(
         mcp_client=mcp_client,
         provider=provider,
@@ -44,7 +43,9 @@ async def main():
 
     # Build messages manually for full control
     messages = [
-        SystemMessage(content="You are a webpage summariser, you will be given a url to fetch and then summarise the content and return it to the user."),
+        SystemMessage(
+            content="You are a webpage summariser, you will be given a url to fetch and then summarise the content and return it to the user."
+        ),
         UserMessage(content="https://www.anthropic.com/news/model-context-protocol"),
     ]
 

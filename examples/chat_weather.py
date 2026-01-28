@@ -45,7 +45,9 @@ async def main():
 
     # Build messages manually for full control
     messages = [
-        SystemMessage(content="You are a weather expert. Use the weather tools to get accurate data."),
+        SystemMessage(
+            content="You are a weather expert. Use the weather tools to get accurate data."
+        ),
         UserMessage(content="Compare the weather in Tokyo and Sydney"),
     ]
 
