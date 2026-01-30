@@ -48,7 +48,7 @@
         },
         "time": {
             "command": "python",
-            "args": ["mcp-servers/time-v2/server.py"]
+            "args": ["mcp-servers/time/server.py"]
         },
         "weather": {
             "command": "python",
