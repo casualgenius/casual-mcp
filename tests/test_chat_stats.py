@@ -1,6 +1,5 @@
 """Tests for chat statistics models."""
 
-
 from casual_mcp.models.chat_stats import (
     ChatStats,
     TokenUsageStats,
