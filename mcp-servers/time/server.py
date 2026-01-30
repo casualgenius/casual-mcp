@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from zoneinfo import ZoneInfo
 from typing import Annotated
 from fastmcp import FastMCP, utilities
@@ -31,7 +31,9 @@ def time_since(
 ) -> str:
     """Get human-readable time since a given datetime."""
     past = datetime.fromisoformat(past_date.replace("Z", "+00:00"))
-    delta = datetime.now(datetime.utcnow().astimezone().tzinfo) - past
+    if past.tzinfo is None:
+        past = past.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - past
     return f"{delta.days} days, {delta.seconds // 3600} hours ago"
 
 
