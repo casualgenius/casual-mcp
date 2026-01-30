@@ -61,12 +61,12 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
     messages = await chat_instance.chat(req.messages)
 
     if not messages:
-        result: dict[str, Any] = {"messages": [], "response": ""}
+        error_result: dict[str, Any] = {"messages": [], "response": ""}
         if req.include_stats:
-            result["stats"] = chat_instance.get_stats()
+            error_result["stats"] = chat_instance.get_stats()
         raise HTTPException(
             status_code=500,
-            detail={"error": "No response generated", **result},
+            detail={"error": "No response generated", **error_result},
         )
 
     result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
@@ -81,12 +81,12 @@ async def generate(req: GenerateRequest) -> dict[str, Any]:
     messages = await chat_instance.generate(req.prompt, req.session_id)
 
     if not messages:
-        result: dict[str, Any] = {"messages": [], "response": ""}
+        error_result: dict[str, Any] = {"messages": [], "response": ""}
         if req.include_stats:
-            result["stats"] = chat_instance.get_stats()
+            error_result["stats"] = chat_instance.get_stats()
         raise HTTPException(
             status_code=500,
-            detail={"error": "No response generated", **result},
+            detail={"error": "No response generated", **error_result},
         )
 
     result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}

@@ -396,9 +396,9 @@ class TestMcpToolChatStats:
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
-        assert stats.tools.by_tool == {"math_add": 2, "words_define": 1}
-        assert stats.tools.by_server == {"math": 2, "words": 1}
-        assert stats.tools.total_tool_calls == 3
+        assert stats.tool_calls.by_tool == {"math_add": 2, "words_define": 1}
+        assert stats.tool_calls.by_server == {"math": 2, "words": 1}
+        assert stats.tool_calls.total == 3
 
     async def test_stats_handle_unprefixed_tool_names(self, mock_client, mock_tool_cache):
         """Test that unprefixed tool names use 'default' as server."""
@@ -428,7 +428,7 @@ class TestMcpToolChatStats:
 
         stats = chat.get_stats()
         # "simple_tool" has underscore so splits to "simple" as server
-        assert stats.tools.by_server == {"simple": 1}
+        assert stats.tool_calls.by_server == {"simple": 1}
 
     async def test_stats_handle_no_usage_from_provider(self, mock_client, mock_tool_cache):
         """Test that stats handle providers that return None for usage."""

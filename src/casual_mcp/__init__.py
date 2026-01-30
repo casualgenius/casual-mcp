@@ -1,7 +1,7 @@
 from importlib.metadata import version
 
 from . import models
-from .models.chat_stats import ChatStats, TokenUsageStats, ToolUsageStats
+from .models.chat_stats import ChatStats, TokenUsageStats, ToolCallStats
 
 __version__ = version("casual-mcp")
 from .mcp_tool_chat import McpToolChat
@@ -20,5 +20,5 @@ __all__ = [
     "models",
     "ChatStats",
     "TokenUsageStats",
-    "ToolUsageStats",
+    "ToolCallStats",
 ]

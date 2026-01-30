@@ -10,7 +10,7 @@ from casual_llm import (
 from .chat_stats import (
     ChatStats,
     TokenUsageStats,
-    ToolUsageStats,
+    ToolCallStats,
 )
 from .mcp_server_config import (
     McpServerConfig,
@@ -32,7 +32,7 @@ __all__ = [
     "ChatMessage",
     "ChatStats",
     "TokenUsageStats",
-    "ToolUsageStats",
+    "ToolCallStats",
     "McpModelConfig",
     "OllamaModelConfig",
     "OpenAIModelConfig",

@@ -236,7 +236,7 @@ response = await chat.chat(messages)
 stats = chat.get_stats()
 if stats:
     print(f"Tokens used: {stats.tokens.total_tokens}")
-    print(f"Tool calls: {stats.tools.total_tool_calls}")
+    print(f"Tool calls: {stats.tool_calls.total}")
     print(f"LLM calls: {stats.llm_calls}")
 ```
 
@@ -253,10 +253,10 @@ stats.tokens.prompt_tokens      # Input tokens
 stats.tokens.completion_tokens  # Output tokens
 stats.tokens.total_tokens       # Total (computed)
 
-# Tool usage
-stats.tools.by_tool        # Dict of tool name -> call count, e.g. {"math_add": 2}
-stats.tools.by_server      # Dict of server name -> call count, e.g. {"math": 2}
-stats.tools.total_tool_calls  # Total tool calls (computed)
+# Tool call stats
+stats.tool_calls.by_tool   # Dict of tool name -> call count, e.g. {"math_add": 2}
+stats.tool_calls.by_server # Dict of server name -> call count, e.g. {"math": 2}
+stats.tool_calls.total     # Total tool calls (computed)
 
 # LLM call count
 stats.llm_calls  # Number of LLM calls made (1 = no tools, 2+ = tool loop)
@@ -305,7 +305,7 @@ Exported from `casual_mcp.models`:
 - `OllamaModelConfig`
 - `ChatStats`
 - `TokenUsageStats`
-- `ToolUsageStats`
+- `ToolCallStats`
 
 Use these types to build valid configs:
 
@@ -621,10 +621,10 @@ casual-mcp serve --host 0.0.0.0 --port 8000
             "completion_tokens": 75,
             "total_tokens": 225
         },
-        "tools": {
+        "tool_calls": {
             "by_tool": {"words_define": 1},
             "by_server": {"words": 1},
-            "total_tool_calls": 1
+            "total": 1
         },
         "llm_calls": 2
     }

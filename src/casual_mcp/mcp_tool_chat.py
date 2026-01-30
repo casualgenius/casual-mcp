@@ -142,14 +142,14 @@ class McpToolChat:
             logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
             result_count = 0
             for tool_call in ai_message.tool_calls:
-                # Track tool usage stats
+                # Track tool call stats
                 tool_name = tool_call.function.name
-                self._last_stats.tools.by_tool[tool_name] = (
-                    self._last_stats.tools.by_tool.get(tool_name, 0) + 1
+                self._last_stats.tool_calls.by_tool[tool_name] = (
+                    self._last_stats.tool_calls.by_tool.get(tool_name, 0) + 1
                 )
                 server_name = self._extract_server_from_tool_name(tool_name)
-                self._last_stats.tools.by_server[server_name] = (
-                    self._last_stats.tools.by_server.get(server_name, 0) + 1
+                self._last_stats.tool_calls.by_server[server_name] = (
+                    self._last_stats.tool_calls.by_server.get(server_name, 0) + 1
                 )
 
                 try:
