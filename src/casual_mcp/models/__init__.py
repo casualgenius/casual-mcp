@@ -7,6 +7,11 @@ from casual_llm import (
     UserMessage,
 )
 
+from .chat_stats import (
+    ChatStats,
+    TokenUsageStats,
+    ToolUsageStats,
+)
 from .mcp_server_config import (
     McpServerConfig,
     RemoteServerConfig,
@@ -25,6 +30,9 @@ __all__ = [
     "ToolResultMessage",
     "SystemMessage",
     "ChatMessage",
+    "ChatStats",
+    "TokenUsageStats",
+    "ToolUsageStats",
     "McpModelConfig",
     "OllamaModelConfig",
     "OpenAIModelConfig",

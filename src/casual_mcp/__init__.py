@@ -1,6 +1,7 @@
 from importlib.metadata import version
 
 from . import models
+from .models.chat_stats import ChatStats, TokenUsageStats, ToolUsageStats
 
 __version__ = version("casual-mcp")
 from .mcp_tool_chat import McpToolChat
@@ -17,4 +18,7 @@ __all__ = [
     "load_mcp_client",
     "render_system_prompt",
     "models",
+    "ChatStats",
+    "TokenUsageStats",
+    "ToolUsageStats",
 ]
