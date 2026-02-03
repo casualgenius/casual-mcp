@@ -192,16 +192,35 @@ class McpToolChat:
         logger.debug(f"Tool Call Result: {result}")
 
         result_format = os.getenv("TOOL_RESULT_FORMAT", "result")
-        # Extract text content from result (handle both TextContent and other content types)
-        if not result.content:
+
+        # Prefer structuredContent when available (machine-readable format)
+        # Note: MCP types use camelCase (structuredContent), mypy stubs may differ
+        structured = getattr(result, "structuredContent", None)
+        if structured is not None:
+            try:
+                content_text = json.dumps(structured)
+            except (TypeError, ValueError):
+                content_text = str(structured)
+        elif not result.content:
             content_text = "[No content returned]"
         else:
-            content_item = result.content[0]
-            if hasattr(content_item, "text"):
-                content_text = content_item.text
-            else:
-                # Handle non-text content (e.g., ImageContent)
-                content_text = f"[Non-text content: {type(content_item).__name__}]"
+            # Fall back to processing content items
+            content_parts: list[str] = []
+            for content_item in result.content:
+                if content_item.type == "text":
+                    try:
+                        parsed = json.loads(content_item.text)
+                        content_parts.append(parsed)
+                    except json.JSONDecodeError:
+                        content_parts.append(content_item.text)
+                elif hasattr(content_item, "mimeType"):
+                    # Image or audio content
+                    content_parts.append(f"[{content_item.type}: {content_item.mimeType}]")
+                else:
+                    content_parts.append(str(content_item))
+
+            content_text = json.dumps(content_parts)
+
         content = format_tool_call_result(tool_call, content_text, style=result_format)
 
         return ToolResultMessage(

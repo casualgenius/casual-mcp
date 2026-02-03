@@ -48,10 +48,12 @@ class TestMcpToolChat:
 
         # Mock tool result
         class MockContent:
+            type = "text"
             text = "Tool result"
 
         class MockResult:
             content = [MockContent()]
+            structuredContent = None
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
@@ -90,19 +92,48 @@ class TestMcpToolChat:
 
         # Mock non-text content (e.g., ImageContent)
         class MockImageContent:
-            # No text attribute
-            pass
+            type = "image"
+            mimeType = "image/png"
 
         class MockResult:
             content = [MockImageContent()]
+            structuredContent = None
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
         chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
         result = await chat.execute(tool_call)
 
-        # Should handle gracefully
-        assert "Non-text content" in result.content
+        # Should handle gracefully with structured image info
+        assert "image" in result.content
+        assert "image/png" in result.content
+
+    async def test_execute_tool_prefers_structured_content(
+        self, mock_client, mock_provider, mock_tool_cache
+    ):
+        """Test that structuredContent is preferred over content when available."""
+        tool_call = AssistantToolCall(
+            id="call_123", function=AssistantToolCallFunction(name="test_tool", arguments="{}")
+        )
+
+        # Mock result with both content and structuredContent
+        class MockTextContent:
+            type = "text"
+            text = "Human readable text"
+
+        class MockResult:
+            content = [MockTextContent()]
+            structuredContent = {"data": [1, 2, 3], "status": "ok"}
+
+        mock_client.call_tool = AsyncMock(return_value=MockResult())
+
+        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        result = await chat.execute(tool_call)
+
+        # Should use structuredContent, not the text content
+        assert "Human readable text" not in result.content
+        assert '"data": [1, 2, 3]' in result.content
+        assert '"status": "ok"' in result.content
 
     async def test_chat_adds_system_message(self, mock_client, mock_provider, mock_tool_cache):
         """Test that chat adds system message if not present."""
