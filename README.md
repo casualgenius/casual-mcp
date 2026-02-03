@@ -9,6 +9,7 @@ It includes:
 - ✅ A multi-server MCP client using [FastMCP](https://github.com/jlowin/fastmcp)
 - ✅ Provider support for OpenAI and Ollama (powered by [casual-llm](https://github.com/AlexStansfield/casual-llm))
 - ✅ A recursive tool-calling chat loop
+- ✅ Usage statistics tracking (tokens, tool calls, LLM calls)
 - ✅ System prompt templating with Jinja2
 - ✅ A basic API exposing a chat endpoint
 
@@ -16,6 +17,7 @@ It includes:
 
 - Plug-and-play multi-server tool orchestration
 - OpenAI and Ollama LLM providers (via casual-llm)
+- Usage statistics tracking (tokens, tool calls, LLM calls)
 - Prompt templating with Jinja2
 - Configurable via JSON
 - CLI and API access
@@ -229,7 +231,38 @@ messages = [
   UserMessage(content="What time is it in London?")
 ]
 response = await chat.chat(messages)
+
+# Get usage statistics from the last call
+stats = chat.get_stats()
+if stats:
+    print(f"Tokens used: {stats.tokens.total_tokens}")
+    print(f"Tool calls: {stats.tool_calls.total}")
+    print(f"LLM calls: {stats.llm_calls}")
 ```
+
+#### Usage Statistics
+
+After calling `chat()` or `generate()`, you can retrieve usage statistics via `get_stats()`:
+
+```python
+response = await chat.chat(messages)
+stats = chat.get_stats()
+
+# Token usage (accumulated across all LLM calls in the agentic loop)
+stats.tokens.prompt_tokens      # Input tokens
+stats.tokens.completion_tokens  # Output tokens
+stats.tokens.total_tokens       # Total (computed)
+
+# Tool call stats
+stats.tool_calls.by_tool   # Dict of tool name -> call count, e.g. {"math_add": 2}
+stats.tool_calls.by_server # Dict of server name -> call count, e.g. {"math": 2}
+stats.tool_calls.total     # Total tool calls (computed)
+
+# LLM call count
+stats.llm_calls  # Number of LLM calls made (1 = no tools, 2+ = tool loop)
+```
+
+Stats are reset at the start of each new `chat()` or `generate()` call. Returns `None` if no calls have been made yet.
 
 #### `ProviderFactory`
 Instantiates LLM providers (from casual-llm) based on the selected model config.
@@ -270,6 +303,9 @@ Exported from `casual_mcp.models`:
 - `RemoteServerConfig`
 - `OpenAIModelConfig`
 - `OllamaModelConfig`
+- `ChatStats`
+- `TokenUsageStats`
+- `ToolCallStats`
 
 Use these types to build valid configs:
 
@@ -558,9 +594,10 @@ casual-mcp serve --host 0.0.0.0 --port 8000
 #### Request Body:
 - `model`: the LLM model to use
 - `messages`: list of chat messages (system, assistant, user, etc) that you can pass to the api, allowing you to keep your own chat session in the client calling the api
+- `include_stats`: (optional, default: `false`) include usage statistics in the response
 
 #### Example:
-```
+```json
 {
     "model": "gpt-4.1-nano",
     "messages": [
@@ -568,13 +605,35 @@ casual-mcp serve --host 0.0.0.0 --port 8000
             "role": "user",
             "content": "can you explain what the word consistent means?"
         }
-    ]
+    ],
+    "include_stats": true
+}
+```
+
+#### Response with stats:
+```json
+{
+    "messages": [...],
+    "response": "Consistent means...",
+    "stats": {
+        "tokens": {
+            "prompt_tokens": 150,
+            "completion_tokens": 75,
+            "total_tokens": 225
+        },
+        "tool_calls": {
+            "by_tool": {"words_define": 1},
+            "by_server": {"words": 1},
+            "total": 1
+        },
+        "llm_calls": 2
+    }
 }
 ```
 
 ### Generate
 
-The generate endpoint allows you to send a user prompt as a string. 
+The generate endpoint allows you to send a user prompt as a string.
 
 It also support sessions that keep a record of all messages in the session and feeds them back into the LLM for context. Sessions are stored in memory so are cleared when the server is restarted
 
@@ -582,15 +641,17 @@ It also support sessions that keep a record of all messages in the session and f
 
 ####  Request Body:
 - `model`: the LLM model to use
-- `prompt`: the user prompt 
+- `prompt`: the user prompt
 - `session_id`: an optional ID that stores all the messages from the session and provides them back to the LLM for context
+- `include_stats`: (optional, default: `false`) include usage statistics in the response
 
 #### Example:
-```
+```json
 {
     "session_id": "my-session",
     "model": "gpt-4o-mini",
-    "prompt": "can you explain what the word consistent means?"
+    "prompt": "can you explain what the word consistent means?",
+    "include_stats": true
 }
 ```
 

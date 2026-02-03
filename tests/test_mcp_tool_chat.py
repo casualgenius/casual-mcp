@@ -26,7 +26,10 @@ class TestMcpToolChat:
     @pytest.fixture
     def mock_provider(self):
         """Create mock LLM provider."""
-        return AsyncMock()
+        provider = AsyncMock()
+        # get_usage is a sync method that returns Usage or None
+        provider.get_usage = Mock(return_value=None)
+        return provider
 
     @pytest.fixture
     def mock_tool_cache(self):
@@ -45,10 +48,12 @@ class TestMcpToolChat:
 
         # Mock tool result
         class MockContent:
+            type = "text"
             text = "Tool result"
 
         class MockResult:
             content = [MockContent()]
+            structuredContent = None
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
@@ -87,19 +92,48 @@ class TestMcpToolChat:
 
         # Mock non-text content (e.g., ImageContent)
         class MockImageContent:
-            # No text attribute
-            pass
+            type = "image"
+            mimeType = "image/png"
 
         class MockResult:
             content = [MockImageContent()]
+            structuredContent = None
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
         chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
         result = await chat.execute(tool_call)
 
-        # Should handle gracefully
-        assert "Non-text content" in result.content
+        # Should handle gracefully with structured image info
+        assert "image" in result.content
+        assert "image/png" in result.content
+
+    async def test_execute_tool_prefers_structured_content(
+        self, mock_client, mock_provider, mock_tool_cache
+    ):
+        """Test that structuredContent is preferred over content when available."""
+        tool_call = AssistantToolCall(
+            id="call_123", function=AssistantToolCallFunction(name="test_tool", arguments="{}")
+        )
+
+        # Mock result with both content and structuredContent
+        class MockTextContent:
+            type = "text"
+            text = "Human readable text"
+
+        class MockResult:
+            content = [MockTextContent()]
+            structuredContent = {"data": [1, 2, 3], "status": "ok"}
+
+        mock_client.call_tool = AsyncMock(return_value=MockResult())
+
+        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        result = await chat.execute(tool_call)
+
+        # Should use structuredContent, not the text content
+        assert "Human readable text" not in result.content
+        assert '"data": [1, 2, 3]' in result.content
+        assert '"status": "ok"' in result.content
 
     async def test_chat_adds_system_message(self, mock_client, mock_provider, mock_tool_cache):
         """Test that chat adds system message if not present."""
@@ -147,9 +181,12 @@ class TestMcpToolChat:
 
         # Mock tool execution
         class MockContent:
+            type = "text"
             text = "result"
 
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[MockContent()]))
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
 
         chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
         messages = [UserMessage(content="Test")]
@@ -254,3 +291,209 @@ class TestMcpToolChat:
         result = McpToolChat.get_session("nonexistent")
 
         assert result is None
+
+
+class TestMcpToolChatStats:
+    """Tests for McpToolChat stats functionality."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock MCP client."""
+        client = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        return client
+
+    @pytest.fixture
+    def mock_tool_cache(self):
+        """Create mock tool cache."""
+        cache = Mock()
+        cache.get_tools = AsyncMock(return_value=[])
+        return cache
+
+    def test_get_stats_returns_none_before_chat(self, mock_client, mock_tool_cache):
+        """Test that get_stats returns None before any chat calls."""
+        provider = AsyncMock()
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+
+        assert chat.get_stats() is None
+
+    async def test_get_stats_returns_stats_after_chat(self, mock_client, mock_tool_cache):
+        """Test that get_stats returns stats after chat call."""
+        from casual_llm import Usage
+
+        provider = AsyncMock()
+        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        await chat.chat([UserMessage(content="Hello")])
+
+        stats = chat.get_stats()
+        assert stats is not None
+        assert stats.tokens.prompt_tokens == 10
+        assert stats.tokens.completion_tokens == 5
+        assert stats.tokens.total_tokens == 15
+        assert stats.llm_calls == 1
+
+    async def test_stats_reset_on_new_chat(self, mock_client, mock_tool_cache):
+        """Test that stats are reset at the start of each chat call."""
+        from casual_llm import Usage
+
+        provider = AsyncMock()
+        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+
+        # First chat
+        await chat.chat([UserMessage(content="First")])
+        stats1 = chat.get_stats()
+        assert stats1.tokens.prompt_tokens == 10
+
+        # Second chat - stats should be fresh, not accumulated
+        await chat.chat([UserMessage(content="Second")])
+        stats2 = chat.get_stats()
+        assert stats2.tokens.prompt_tokens == 10  # Not 20
+
+    async def test_stats_accumulate_across_llm_calls(self, mock_client, mock_tool_cache):
+        """Test that token usage accumulates across multiple LLM calls in one chat."""
+        from casual_llm import Usage
+
+        tool_call = AssistantToolCall(
+            id="call_1", function=AssistantToolCallFunction(name="math_add", arguments="{}")
+        )
+
+        provider = AsyncMock()
+        provider.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[tool_call]),
+                AssistantMessage(content="Final response"),
+            ]
+        )
+        # Return different usage for each call
+        provider.get_usage = Mock(
+            side_effect=[
+                Usage(prompt_tokens=100, completion_tokens=20),
+                Usage(prompt_tokens=150, completion_tokens=30),
+            ]
+        )
+
+        # Mock tool execution
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        await chat.chat([UserMessage(content="Test")])
+
+        stats = chat.get_stats()
+        assert stats.llm_calls == 2
+        assert stats.tokens.prompt_tokens == 250  # 100 + 150
+        assert stats.tokens.completion_tokens == 50  # 20 + 30
+        assert stats.tokens.total_tokens == 300
+
+    async def test_stats_track_tool_usage(self, mock_client, mock_tool_cache):
+        """Test that tool usage is tracked by tool name and server."""
+        from casual_llm import Usage
+
+        tool_calls = [
+            AssistantToolCall(
+                id="call_1", function=AssistantToolCallFunction(name="math_add", arguments="{}")
+            ),
+            AssistantToolCall(
+                id="call_2", function=AssistantToolCallFunction(name="math_add", arguments="{}")
+            ),
+            AssistantToolCall(
+                id="call_3",
+                function=AssistantToolCallFunction(name="words_define", arguments="{}"),
+            ),
+        ]
+
+        provider = AsyncMock()
+        provider.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=tool_calls),
+                AssistantMessage(content="Final response"),
+            ]
+        )
+        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        # Mock tool execution
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        await chat.chat([UserMessage(content="Test")])
+
+        stats = chat.get_stats()
+        assert stats.tool_calls.by_tool == {"math_add": 2, "words_define": 1}
+        assert stats.tool_calls.by_server == {"math": 2, "words": 1}
+        assert stats.tool_calls.total == 3
+
+    async def test_stats_handle_unprefixed_tool_names(self, mock_client, mock_tool_cache):
+        """Test that unprefixed tool names use 'default' as server."""
+        from casual_llm import Usage
+
+        tool_call = AssistantToolCall(
+            id="call_1", function=AssistantToolCallFunction(name="simple_tool", arguments="{}")
+        )
+
+        provider = AsyncMock()
+        provider.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[tool_call]),
+                AssistantMessage(content="Final response"),
+            ]
+        )
+        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        # Mock tool execution
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        await chat.chat([UserMessage(content="Test")])
+
+        stats = chat.get_stats()
+        # "simple_tool" has underscore so splits to "simple" as server
+        assert stats.tool_calls.by_server == {"simple": 1}
+
+    async def test_stats_handle_no_usage_from_provider(self, mock_client, mock_tool_cache):
+        """Test that stats handle providers that return None for usage."""
+        provider = AsyncMock()
+        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        provider.get_usage = Mock(return_value=None)
+
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        await chat.chat([UserMessage(content="Hello")])
+
+        stats = chat.get_stats()
+        assert stats is not None
+        assert stats.tokens.prompt_tokens == 0
+        assert stats.tokens.completion_tokens == 0
+        assert stats.llm_calls == 1
+
+    def test_extract_server_from_tool_name(self, mock_client, mock_tool_cache):
+        """Test server name extraction from tool names."""
+        provider = AsyncMock()
+        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+
+        assert chat._extract_server_from_tool_name("math_add") == "math"
+        assert chat._extract_server_from_tool_name("words_define") == "words"
+        assert chat._extract_server_from_tool_name("server_name_tool") == "server"
+        assert chat._extract_server_from_tool_name("notool") == "default"

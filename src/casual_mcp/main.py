@@ -45,28 +45,54 @@ class GenerateRequest(BaseModel):
     model: str = Field(title="Model to use")
     system_prompt: str | None = Field(default=None, title="System Prompt to use")
     prompt: str = Field(title="User Prompt")
+    include_stats: bool = Field(default=False, title="Include usage statistics in response")
 
 
 class ChatRequest(BaseModel):
     model: str = Field(title="Model to use")
     system_prompt: str | None = Field(default=None, title="System Prompt to use")
     messages: list[ChatMessage] = Field(title="Previous messages to supply to the LLM")
+    include_stats: bool = Field(default=False, title="Include usage statistics in response")
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> dict[str, Any]:
-    chat = await get_chat(req.model, req.system_prompt)
-    messages = await chat.chat(req.messages)
+    chat_instance = await get_chat(req.model, req.system_prompt)
+    messages = await chat_instance.chat(req.messages)
 
-    return {"messages": messages, "response": messages[-1].content}
+    if not messages:
+        error_result: dict[str, Any] = {"messages": [], "response": ""}
+        if req.include_stats:
+            error_result["stats"] = chat_instance.get_stats()
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "No response generated", **error_result},
+        )
+
+    result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
+    if req.include_stats:
+        result["stats"] = chat_instance.get_stats()
+    return result
 
 
 @app.post("/generate")
 async def generate(req: GenerateRequest) -> dict[str, Any]:
-    chat = await get_chat(req.model, req.system_prompt)
-    messages = await chat.generate(req.prompt, req.session_id)
+    chat_instance = await get_chat(req.model, req.system_prompt)
+    messages = await chat_instance.generate(req.prompt, req.session_id)
 
-    return {"messages": messages, "response": messages[-1].content}
+    if not messages:
+        error_result: dict[str, Any] = {"messages": [], "response": ""}
+        if req.include_stats:
+            error_result["stats"] = chat_instance.get_stats()
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "No response generated", **error_result},
+        )
+
+    result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
+    if req.include_stats:
+        result["stats"] = chat_instance.get_stats()
+    return result
 
 
 @app.get("/generate/session/{session_id}")

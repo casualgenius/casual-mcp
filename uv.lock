@@ -146,16 +146,16 @@ wheels = [
 
 [[package]]
 name = "casual-llm"
-version = "0.4.2"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
     { name = "ollama" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/fe/b5ea830636b07a9e2d69f529f8792794b32cd250abc14599b0a68f6712d6/casual_llm-0.4.2.tar.gz", hash = "sha256:923fb727795b6281f229b3962ca976c69e6582d61c03487cdad91abff5f30bbd", size = 48339, upload-time = "2026-01-28T02:21:54.171Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/06/418b70b401236aa3079758a58d9375f5f72fe3bcbadca39a09f3d0804cc9/casual_llm-0.4.3.tar.gz", hash = "sha256:4aeb217731fc3c738c09d433320c7547936eb3b668bf61ce97a5090c99a5c675", size = 48741, upload-time = "2026-01-29T10:23:22.295Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/81/70cf422a280eefb43e0e200da2b57adfb3ca8ee66603ea361c3237e6c30a/casual_llm-0.4.2-py3-none-any.whl", hash = "sha256:c3840a919832fc381df774162f981365355279859a921aace4cc4b6451dc3c67", size = 35587, upload-time = "2026-01-28T02:21:52.652Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/43/66d2691acfa016cf95ef93333065ed1b573e96415bc71cc4db6863fc0898/casual_llm-0.4.3-py3-none-any.whl", hash = "sha256:c7ff261b53cc0518df2f1be0dbbf0762c64e69235752d1edb2960d4969a92d92", size = 35653, upload-time = "2026-01-29T10:23:20.395Z" },
 ]
 
 [package.optional-dependencies]
@@ -165,7 +165,7 @@ openai = [
 
 [[package]]
 name = "casual-mcp"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "casual-llm", extra = ["openai"] },
@@ -194,7 +194,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "casual-llm", extras = ["openai"], specifier = ">=0.4.2" },
+    { name = "casual-llm", extras = ["openai"], specifier = ">=0.4.3" },
     { name = "dateparser", specifier = ">=1.2.1" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.12.4" },
