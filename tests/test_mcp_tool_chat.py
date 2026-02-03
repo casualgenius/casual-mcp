@@ -181,9 +181,12 @@ class TestMcpToolChat:
 
         # Mock tool execution
         class MockContent:
+            type = "text"
             text = "result"
 
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[MockContent()]))
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
 
         chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
         messages = [UserMessage(content="Test")]
@@ -378,9 +381,12 @@ class TestMcpToolChatStats:
 
         # Mock tool execution
         class MockContent:
+            type = "text"
             text = "result"
 
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[MockContent()]))
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
 
         chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
@@ -419,9 +425,12 @@ class TestMcpToolChatStats:
 
         # Mock tool execution
         class MockContent:
+            type = "text"
             text = "result"
 
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[MockContent()]))
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
 
         chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
@@ -450,9 +459,12 @@ class TestMcpToolChatStats:
 
         # Mock tool execution
         class MockContent:
+            type = "text"
             text = "result"
 
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[MockContent()]))
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
 
         chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])

@@ -128,8 +128,10 @@ class McpToolChat:
             self._last_stats.llm_calls += 1
             usage = self.provider.get_usage()
             if usage:
-                self._last_stats.tokens.prompt_tokens += usage.prompt_tokens
-                self._last_stats.tokens.completion_tokens += usage.completion_tokens
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+                self._last_stats.tokens.prompt_tokens += prompt_tokens
+                self._last_stats.tokens.completion_tokens += completion_tokens
 
             # Add the assistant's message
             response_messages.append(ai_message)
@@ -205,7 +207,7 @@ class McpToolChat:
             content_text = "[No content returned]"
         else:
             # Fall back to processing content items
-            content_parts: list[str] = []
+            content_parts: list[Any] = []
             for content_item in result.content:
                 if content_item.type == "text":
                     try:
