@@ -24,12 +24,12 @@ class TestMcpToolChat:
         return client
 
     @pytest.fixture
-    def mock_provider(self):
-        """Create mock LLM provider."""
-        provider = AsyncMock()
+    def mock_model(self):
+        """Create mock LLM model."""
+        model = AsyncMock()
         # get_usage is a sync method that returns Usage or None
-        provider.get_usage = Mock(return_value=None)
-        return provider
+        model.get_usage = Mock(return_value=None)
+        return model
 
     @pytest.fixture
     def mock_tool_cache(self):
@@ -38,7 +38,7 @@ class TestMcpToolChat:
         cache.get_tools = AsyncMock(return_value=[])
         return cache
 
-    async def test_execute_tool_success(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_execute_tool_success(self, mock_client, mock_model, mock_tool_cache):
         """Test successful tool execution."""
         # Setup
         tool_call = AssistantToolCall(
@@ -57,7 +57,7 @@ class TestMcpToolChat:
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
-        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "system prompt", mock_tool_cache)
 
         # Execute
         result = await chat.execute(tool_call)
@@ -68,7 +68,7 @@ class TestMcpToolChat:
         assert "Tool result" in result.content
         mock_client.call_tool.assert_called_once_with("test_tool", {"arg": "value"}, meta=None)
 
-    async def test_execute_tool_handles_error(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_execute_tool_handles_error(self, mock_client, mock_model, mock_tool_cache):
         """Test that tool execution handles errors."""
         tool_call = AssistantToolCall(
             id="call_123", function=AssistantToolCallFunction(name="test_tool", arguments="{}")
@@ -76,14 +76,14 @@ class TestMcpToolChat:
 
         mock_client.call_tool = AsyncMock(side_effect=ValueError("Tool error"))
 
-        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "system prompt", mock_tool_cache)
         result = await chat.execute(tool_call)
 
         # Should return error message
         assert "Tool error" in result.content
 
     async def test_execute_tool_handles_non_text_content(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that tool execution handles non-text content gracefully."""
         tool_call = AssistantToolCall(
@@ -101,7 +101,7 @@ class TestMcpToolChat:
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
-        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "system prompt", mock_tool_cache)
         result = await chat.execute(tool_call)
 
         # Should handle gracefully with structured image info
@@ -109,7 +109,7 @@ class TestMcpToolChat:
         assert "image/png" in result.content
 
     async def test_execute_tool_prefers_structured_content(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that structuredContent is preferred over content when available."""
         tool_call = AssistantToolCall(
@@ -127,7 +127,7 @@ class TestMcpToolChat:
 
         mock_client.call_tool = AsyncMock(return_value=MockResult())
 
-        chat = McpToolChat(mock_client, mock_provider, "system prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "system prompt", mock_tool_cache)
         result = await chat.execute(tool_call)
 
         # Should use structuredContent, not the text content
@@ -135,11 +135,11 @@ class TestMcpToolChat:
         assert '"data": [1, 2, 3]' in result.content
         assert '"status": "ok"' in result.content
 
-    async def test_chat_adds_system_message(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_chat_adds_system_message(self, mock_client, mock_model, mock_tool_cache):
         """Test that chat adds system message if not present."""
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System prompt", mock_tool_cache)
         messages = [UserMessage(content="Hello")]
 
         await chat.chat(messages)
@@ -149,14 +149,14 @@ class TestMcpToolChat:
         assert messages[0].role == "system"
 
     async def test_chat_doesnt_duplicate_system_message(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that chat doesn't add system message if already present."""
         from casual_llm import SystemMessage
 
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System prompt", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System prompt", mock_tool_cache)
         messages = [SystemMessage(content="Existing system"), UserMessage(content="Hello")]
 
         await chat.chat(messages)
@@ -165,14 +165,14 @@ class TestMcpToolChat:
         system_messages = [m for m in messages if m.role == "system"]
         assert len(system_messages) == 1
 
-    async def test_chat_loops_on_tool_calls(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_chat_loops_on_tool_calls(self, mock_client, mock_model, mock_tool_cache):
         """Test that chat loops when LLM requests tool calls."""
         # First response has tool call, second doesn't
         tool_call = AssistantToolCall(
             id="call_1", function=AssistantToolCallFunction(name="tool1", arguments="{}")
         )
 
-        mock_provider.chat = AsyncMock(
+        mock_model.chat = AsyncMock(
             side_effect=[
                 AssistantMessage(content="", tool_calls=[tool_call]),
                 AssistantMessage(content="Final response"),
@@ -188,39 +188,39 @@ class TestMcpToolChat:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
         messages = [UserMessage(content="Test")]
 
         response = await chat.chat(messages)
 
         # Should have called provider twice (once for tool call, once for final)
-        assert mock_provider.chat.call_count == 2
+        assert mock_model.chat.call_count == 2
         assert len(response) >= 2  # At least assistant message and tool result
 
-    async def test_chat_stops_when_no_tool_calls(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_chat_stops_when_no_tool_calls(self, mock_client, mock_model, mock_tool_cache):
         """Test that chat stops when LLM doesn't request tool calls."""
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Final response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Final response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
         messages = [UserMessage(content="Test")]
 
         response = await chat.chat(messages)
 
         # Should have called provider once
-        assert mock_provider.chat.call_count == 1
+        assert mock_model.chat.call_count == 1
         assert len(response) == 1
         assert response[0].content == "Final response"
 
-    async def test_generate_creates_user_message(self, mock_client, mock_provider, mock_tool_cache):
+    async def test_generate_creates_user_message(self, mock_client, mock_model, mock_tool_cache):
         """Test that generate creates a UserMessage from prompt."""
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
 
         await chat.generate("Hello")
 
         # Should have called chat with UserMessage
-        call_args = mock_provider.chat.call_args
+        call_args = mock_model.chat.call_args
         messages = call_args[1]["messages"]
 
         # Should have system + user message
@@ -229,21 +229,21 @@ class TestMcpToolChat:
         assert user_messages[0].content == "Hello"
 
     async def test_generate_with_session_retrieves_messages(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that generate with session_id retrieves session messages."""
         from casual_mcp.mcp_tool_chat import sessions
 
         sessions["test_session"] = [UserMessage(content="Previous message")]
 
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
 
         await chat.generate("New message", session_id="test_session")
 
         # Should have included previous message
-        call_args = mock_provider.chat.call_args
+        call_args = mock_model.chat.call_args
         messages = call_args[1]["messages"]
 
         user_messages = [m for m in messages if m.role == "user"]
@@ -253,14 +253,14 @@ class TestMcpToolChat:
         sessions.clear()
 
     async def test_generate_with_session_adds_responses(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that generate with session adds responses to session."""
         from casual_mcp.mcp_tool_chat import sessions
 
-        mock_provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
 
         await chat.generate("Message", session_id="test_session")
 
@@ -270,7 +270,7 @@ class TestMcpToolChat:
         # Cleanup
         sessions.clear()
 
-    def test_get_session_returns_session(self, mock_client, mock_provider, mock_tool_cache):
+    def test_get_session_returns_session(self, mock_client, mock_model, mock_tool_cache):
         """Test that get_session returns the correct session."""
         from casual_mcp.mcp_tool_chat import sessions
 
@@ -285,7 +285,7 @@ class TestMcpToolChat:
         sessions.clear()
 
     def test_get_session_returns_none_for_nonexistent(
-        self, mock_client, mock_provider, mock_tool_cache
+        self, mock_client, mock_model, mock_tool_cache
     ):
         """Test that get_session returns None for nonexistent session."""
         result = McpToolChat.get_session("nonexistent")
@@ -313,8 +313,8 @@ class TestMcpToolChatStats:
 
     def test_get_stats_returns_none_before_chat(self, mock_client, mock_tool_cache):
         """Test that get_stats returns None before any chat calls."""
-        provider = AsyncMock()
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        model = AsyncMock()
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
 
         assert chat.get_stats() is None
 
@@ -322,11 +322,11 @@ class TestMcpToolChatStats:
         """Test that get_stats returns stats after chat call."""
         from casual_llm import Usage
 
-        provider = AsyncMock()
-        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+        model = AsyncMock()
+        model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        model.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Hello")])
 
         stats = chat.get_stats()
@@ -340,11 +340,11 @@ class TestMcpToolChatStats:
         """Test that stats are reset at the start of each chat call."""
         from casual_llm import Usage
 
-        provider = AsyncMock()
-        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+        model = AsyncMock()
+        model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        model.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
 
         # First chat
         await chat.chat([UserMessage(content="First")])
@@ -364,15 +364,15 @@ class TestMcpToolChatStats:
             id="call_1", function=AssistantToolCallFunction(name="math_add", arguments="{}")
         )
 
-        provider = AsyncMock()
-        provider.chat = AsyncMock(
+        model = AsyncMock()
+        model.chat = AsyncMock(
             side_effect=[
                 AssistantMessage(content="", tool_calls=[tool_call]),
                 AssistantMessage(content="Final response"),
             ]
         )
         # Return different usage for each call
-        provider.get_usage = Mock(
+        model.get_usage = Mock(
             side_effect=[
                 Usage(prompt_tokens=100, completion_tokens=20),
                 Usage(prompt_tokens=150, completion_tokens=30),
@@ -388,7 +388,7 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
@@ -414,14 +414,14 @@ class TestMcpToolChatStats:
             ),
         ]
 
-        provider = AsyncMock()
-        provider.chat = AsyncMock(
+        model = AsyncMock()
+        model.chat = AsyncMock(
             side_effect=[
                 AssistantMessage(content="", tool_calls=tool_calls),
                 AssistantMessage(content="Final response"),
             ]
         )
-        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+        model.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
 
         # Mock tool execution
         class MockContent:
@@ -432,7 +432,7 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
@@ -448,14 +448,14 @@ class TestMcpToolChatStats:
             id="call_1", function=AssistantToolCallFunction(name="simple_tool", arguments="{}")
         )
 
-        provider = AsyncMock()
-        provider.chat = AsyncMock(
+        model = AsyncMock()
+        model.chat = AsyncMock(
             side_effect=[
                 AssistantMessage(content="", tool_calls=[tool_call]),
                 AssistantMessage(content="Final response"),
             ]
         )
-        provider.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+        model.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
 
         # Mock tool execution
         class MockContent:
@@ -466,20 +466,20 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
         # "simple_tool" has underscore so splits to "simple" as server
         assert stats.tool_calls.by_server == {"simple": 1}
 
-    async def test_stats_handle_no_usage_from_provider(self, mock_client, mock_tool_cache):
-        """Test that stats handle providers that return None for usage."""
-        provider = AsyncMock()
-        provider.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-        provider.get_usage = Mock(return_value=None)
+    async def test_stats_handle_no_usage_from_model(self, mock_client, mock_tool_cache):
+        """Test that stats handle models that return None for usage."""
+        model = AsyncMock()
+        model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
+        model.get_usage = Mock(return_value=None)
 
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Hello")])
 
         stats = chat.get_stats()
@@ -490,8 +490,8 @@ class TestMcpToolChatStats:
 
     def test_extract_server_from_tool_name(self, mock_client, mock_tool_cache):
         """Test server name extraction from tool names."""
-        provider = AsyncMock()
-        chat = McpToolChat(mock_client, provider, "System", mock_tool_cache)
+        model = AsyncMock()
+        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
 
         assert chat._extract_server_from_tool_name("math_add") == "math"
         assert chat._extract_server_from_tool_name("words_define") == "words"

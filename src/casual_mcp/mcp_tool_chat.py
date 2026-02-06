@@ -5,7 +5,7 @@ from typing import Any
 from casual_llm import (
     AssistantToolCall,
     ChatMessage,
-    LLMProvider,
+    Model,
     SystemMessage,
     ToolResultMessage,
     UserMessage,
@@ -47,12 +47,12 @@ class McpToolChat:
     def __init__(
         self,
         mcp_client: Client[Any],
-        provider: LLMProvider,
+        model: Model,
         system: str | None = None,
         tool_cache: ToolCache | None = None,
         server_names: set[str] | None = None,
     ):
-        self.provider = provider
+        self.model = model
         self.mcp_client = mcp_client
         self.system = system
         self.tool_cache = tool_cache or ToolCache(mcp_client)
@@ -174,11 +174,11 @@ class McpToolChat:
         response_messages: list[ChatMessage] = []
         while True:
             logger.info("Calling the LLM")
-            ai_message = await self.provider.chat(messages=messages, tools=tools_from_mcp(tools))
+            ai_message = await self.model.chat(messages=messages, tools=tools_from_mcp(tools))
 
             # Accumulate token usage stats
             self._last_stats.llm_calls += 1
-            usage = self.provider.get_usage()
+            usage = self.model.get_usage()
             if usage:
                 prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 completion_tokens = getattr(usage, "completion_tokens", 0) or 0
