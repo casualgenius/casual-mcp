@@ -165,7 +165,7 @@ openai = [
 
 [[package]]
 name = "casual-mcp"
-version = "0.7.0"
+version = "0.7.1"
 source = { editable = "." }
 dependencies = [
     { name = "casual-llm", extra = ["openai"] },
@@ -195,7 +195,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "casual-llm", extras = ["openai"], specifier = ">=0.4.3" },
+    { name = "casual-llm", extras = ["openai"], specifier = ">=0.4.3,<0.5.0" },
     { name = "dateparser", specifier = ">=1.2.1" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.12.4" },
