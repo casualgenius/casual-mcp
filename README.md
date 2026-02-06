@@ -108,15 +108,15 @@ See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response fo
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ProviderFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
 
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 
-provider_factory = ProviderFactory()
-provider = provider_factory.get_provider("gpt-4.1", config.models["gpt-4.1"])
+model_factory = ModelFactory()
+llm_model = model_factory.get_model("gpt-4.1", config.models["gpt-4.1"])
 
-chat = McpToolChat(mcp_client, provider)
+chat = McpToolChat(mcp_client, llm_model)
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it?")
@@ -147,7 +147,7 @@ Casual MCP orchestrates LLMs and MCP tool servers in a recursive loop:
 
 1. **MCP Client** connects to tool servers (local stdio or remote HTTP/SSE)
 2. **Tool Cache** fetches and caches tools from all servers
-3. **ProviderFactory** creates LLM providers from casual-llm
+3. **ModelFactory** creates LLM clients and models from casual-llm
 4. **McpToolChat** runs the recursive loop until the LLM provides a final answer
 
 ## Environment Variables
