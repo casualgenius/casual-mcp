@@ -66,7 +66,7 @@ class TestMcpToolChat:
         assert result.name == "test_tool"
         assert result.tool_call_id == "call_123"
         assert "Tool result" in result.content
-        mock_client.call_tool.assert_called_once_with("test_tool", {"arg": "value"})
+        mock_client.call_tool.assert_called_once_with("test_tool", {"arg": "value"}, meta=None)
 
     async def test_execute_tool_handles_error(self, mock_client, mock_provider, mock_tool_cache):
         """Test that tool execution handles errors."""
