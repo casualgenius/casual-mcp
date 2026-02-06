@@ -6,7 +6,7 @@ Import and use the core framework in your own Python code.
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ProviderFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
 
 model = "gpt-4.1-nano"
 messages = [
@@ -18,11 +18,11 @@ messages = [
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 
-# Get provider and run chat
-provider_factory = ProviderFactory()
-provider = provider_factory.get_provider(model, config.models[model])
+# Get model and run chat
+model_factory = ModelFactory()
+llm_model = model_factory.get_model(model, config.models[model])
 
-chat = McpToolChat(mcp_client, provider)
+chat = McpToolChat(mcp_client, llm_model)
 response_messages = await chat.chat(messages)
 ```
 
@@ -30,7 +30,7 @@ response_messages = await chat.chat(messages)
 
 ### McpToolChat
 
-Orchestrates LLM interaction with tools using a recursive loop. Accepts any provider implementing the `LLMProvider` protocol from casual-llm.
+Orchestrates LLM interaction with tools using a recursive loop. Accepts a `Model` instance from casual-llm.
 
 ```python
 from casual_llm import SystemMessage, UserMessage
@@ -39,7 +39,7 @@ from casual_mcp.tool_cache import ToolCache
 
 # Setup
 tool_cache = ToolCache(mcp_client)
-chat = McpToolChat(mcp_client, provider, system_prompt, tool_cache=tool_cache)
+chat = McpToolChat(mcp_client, llm_model, system_prompt, tool_cache=tool_cache)
 
 # Simple prompt-based interface
 response = await chat.generate("What time is it in London?")
@@ -55,15 +55,15 @@ messages = [
 response = await chat.chat(messages)
 ```
 
-### ProviderFactory
+### ModelFactory
 
-Creates LLM providers from casual-llm based on model config.
+Creates LLM clients and models from casual-llm based on model config. Clients are cached by provider+endpoint, models by name.
 
 ```python
-from casual_mcp import ProviderFactory
+from casual_mcp import ModelFactory
 
-provider_factory = ProviderFactory()
-provider = provider_factory.get_provider("gpt-4.1", model_config)
+model_factory = ModelFactory()
+llm_model = model_factory.get_model("gpt-4.1", model_config)
 ```
 
 ### load_config / load_mcp_client

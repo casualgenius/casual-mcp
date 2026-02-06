@@ -48,7 +48,7 @@ casual-mcp tools                              # List available tools
 
 **`McpToolChat`** ([src/casual_mcp/mcp_tool_chat.py](src/casual_mcp/mcp_tool_chat.py))
 - Orchestrates LLM interaction with tools using a recursive loop
-- Accepts any provider implementing the `LLMProvider` protocol from casual-llm
+- Accepts a `Model` instance from casual-llm
 - Manages chat sessions (stored in-memory, for testing/development only)
 - Two main methods:
   - `generate(prompt, session_id)` - Simple prompt-based interface with optional session
@@ -56,11 +56,12 @@ casual-mcp tools                              # List available tools
 - Executes tools via the MCP client and feeds results back to the LLM
 - Automatically converts MCP tools to casual-llm format via `convert_tools`
 
-**`ProviderFactory`** ([src/casual_mcp/provider_factory.py](src/casual_mcp/provider_factory.py))
-- Creates and caches LLM provider instances from casual-llm
+**`ModelFactory`** ([src/casual_mcp/model_factory.py](src/casual_mcp/model_factory.py))
+- Creates and caches LLM client and model instances from casual-llm
 - Supports OpenAI and Ollama providers (via casual-llm)
-- Maps model config to casual-llm's `create_provider()` function
-- Returns `LLMProvider` instances that can be used with `McpToolChat`
+- Two-tier caching: clients cached by provider+endpoint, models cached by name
+- Multiple models sharing the same provider+endpoint reuse a single client connection
+- Returns `Model` instances that can be used with `McpToolChat`
 
 **`ToolCache`** ([src/casual_mcp/tool_cache.py](src/casual_mcp/tool_cache.py))
 - Caches MCP tool listings to avoid repeated `list_tools` calls
@@ -148,7 +149,7 @@ src/casual_mcp/
 │   └── mcp_server_config.py  # StdioServerConfig, RemoteServerConfig
 ├── convert_tools.py       # MCP → casual-llm tool format conversion
 ├── mcp_tool_chat.py       # Core chat orchestration with tool calling
-├── provider_factory.py    # Creates casual-llm providers from config
+├── model_factory.py       # Creates casual-llm clients and models from config
 ├── tool_cache.py          # Tool listing cache with TTL
 ├── utils.py               # Config loading, MCP client setup, tool formatting
 ├── logging.py             # Logging configuration
@@ -161,13 +162,13 @@ prompt-templates/          # Jinja2 templates for system prompts
 
 ## Key Design Patterns
 
-1. **casual-llm Integration**: All LLM providers come from the casual-llm library. `ProviderFactory` creates casual-llm providers using `create_provider()` based on model config. `McpToolChat` accepts any object implementing casual-llm's `LLMProvider` protocol.
+1. **casual-llm Integration**: All LLM clients and models come from the casual-llm library. `ModelFactory` creates clients via `create_client()` and models via `create_model()` based on model config. `McpToolChat` accepts a `Model` instance from casual-llm.
 
-2. **Tool Format Conversion**: MCP tools are automatically converted to casual-llm's `Tool` format using `convert_tools.py`. This happens transparently in `McpToolChat.chat()` before calling the LLM provider.
+2. **Tool Format Conversion**: MCP tools are automatically converted to casual-llm's `Tool` format using `convert_tools.py`. This happens transparently in `McpToolChat.chat()` before calling the model.
 
 3. **Tool Cache with TTL**: The `ToolCache` caches tool listings with a configurable TTL (default 30 seconds). Tools are fetched from all MCP servers on first access or after TTL expires.
 
-4. **Provider Singleton**: `ProviderFactory` caches provider instances by name to avoid recreating them. Providers are reused across multiple chat requests.
+4. **Two-Tier Caching**: `ModelFactory` caches clients by provider+endpoint and models by name. Multiple models sharing the same provider+endpoint reuse a single client connection.
 
 5. **Recursive Tool Calling Loop**: `McpToolChat.chat()` implements the agentic loop:
    - Send messages + tools to LLM
