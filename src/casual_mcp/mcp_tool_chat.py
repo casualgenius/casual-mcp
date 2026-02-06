@@ -15,11 +15,16 @@ from fastmcp import Client
 from casual_mcp.convert_tools import tools_from_mcp
 from casual_mcp.logging import get_logger
 from casual_mcp.models.chat_stats import ChatStats
+from casual_mcp.models.toolset_config import ToolSetConfig
 from casual_mcp.tool_cache import ToolCache
+from casual_mcp.tool_filter import filter_tools_by_toolset
 from casual_mcp.utils import format_tool_call_result
 
 logger = get_logger("mcp_tool_chat")
 sessions: dict[str, list[ChatMessage]] = {}
+
+# Type alias for metadata dictionary
+MetaDict = dict[str, Any]
 
 
 def get_session_messages(session_id: str) -> list[ChatMessage]:
@@ -45,11 +50,13 @@ class McpToolChat:
         provider: LLMProvider,
         system: str | None = None,
         tool_cache: ToolCache | None = None,
+        server_names: set[str] | None = None,
     ):
         self.provider = provider
         self.mcp_client = mcp_client
         self.system = system
         self.tool_cache = tool_cache or ToolCache(mcp_client)
+        self.server_names = server_names or set()
         self._tool_cache_version = -1
         self._last_stats: ChatStats | None = None
 
@@ -80,7 +87,28 @@ class McpToolChat:
             return tool_name.split("_", 1)[0]
         return "default"
 
-    async def generate(self, prompt: str, session_id: str | None = None) -> list[ChatMessage]:
+    async def generate(
+        self,
+        prompt: str,
+        session_id: str | None = None,
+        tool_set: ToolSetConfig | None = None,
+        meta: MetaDict | None = None,
+    ) -> list[ChatMessage]:
+        """
+        Generate a response to a prompt, optionally using session history.
+
+        Args:
+            prompt: The user prompt to respond to
+            session_id: Optional session ID for conversation persistence
+            tool_set: Optional tool set configuration to filter available tools
+            meta: Optional metadata to pass through to MCP tool calls.
+                  Useful for passing context like character_id without
+                  exposing it to the LLM. Servers can access this via
+                  ctx.request_context.meta.
+
+        Returns:
+            List of response messages including any tool calls and results
+        """
         # Fetch the session if we have a session ID
         messages: list[ChatMessage]
         if session_id:
@@ -97,7 +125,7 @@ class McpToolChat:
             add_messages_to_session(session_id, [user_message])
 
         # Perform Chat
-        response = await self.chat(messages=messages)
+        response = await self.chat(messages=messages, tool_set=tool_set, meta=meta)
 
         # Add responses to session
         if session_id:
@@ -105,8 +133,32 @@ class McpToolChat:
 
         return response
 
-    async def chat(self, messages: list[ChatMessage]) -> list[ChatMessage]:
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        tool_set: ToolSetConfig | None = None,
+        meta: MetaDict | None = None,
+    ) -> list[ChatMessage]:
+        """
+        Process a conversation with tool calling support.
+
+        Args:
+            messages: The conversation messages to process
+            tool_set: Optional tool set configuration to filter available tools
+            meta: Optional metadata to pass through to MCP tool calls.
+                  Useful for passing context like character_id without
+                  exposing it to the LLM. Servers can access this via
+                  ctx.request_context.meta.
+
+        Returns:
+            List of response messages including any tool calls and results
+        """
         tools = await self.tool_cache.get_tools()
+
+        # Filter tools if a toolset is specified
+        if tool_set is not None:
+            tools = filter_tools_by_toolset(tools, tool_set, self.server_names, validate=True)
+            logger.info(f"Filtered to {len(tools)} tools using toolset")
 
         # Reset stats at the start of each chat
         self._last_stats = ChatStats()
@@ -155,13 +207,18 @@ class McpToolChat:
                 )
 
                 try:
-                    result = await self.execute(tool_call)
+                    result = await self.execute(tool_call, meta=meta)
                 except Exception as e:
                     logger.error(
                         f"Failed to execute tool '{tool_call.function.name}' "
                         f"(id={tool_call.id}): {e}"
                     )
-                    continue
+                    # Surface the failure to the LLM so it knows the tool failed
+                    result = ToolResultMessage(
+                        name=tool_call.function.name,
+                        tool_call_id=tool_call.id,
+                        content=f"Error executing tool: {e}",
+                    )
                 if result:
                     messages.append(result)
                     response_messages.append(result)
@@ -173,12 +230,27 @@ class McpToolChat:
 
         return response_messages
 
-    async def execute(self, tool_call: AssistantToolCall) -> ToolResultMessage:
+    async def execute(
+        self,
+        tool_call: AssistantToolCall,
+        meta: MetaDict | None = None,
+    ) -> ToolResultMessage:
+        """
+        Execute a single tool call.
+
+        Args:
+            tool_call: The tool call to execute
+            meta: Optional metadata to pass to the MCP server.
+                  Servers can access this via ctx.request_context.meta.
+
+        Returns:
+            ToolResultMessage with the tool execution result
+        """
         tool_name = tool_call.function.name
         tool_args = json.loads(tool_call.function.arguments)
         try:
             async with self.mcp_client:
-                result = await self.mcp_client.call_tool(tool_name, tool_args)
+                result = await self.mcp_client.call_tool(tool_name, tool_args, meta=meta)
         except Exception as e:
             if isinstance(e, ValueError):
                 logger.warning(e)
