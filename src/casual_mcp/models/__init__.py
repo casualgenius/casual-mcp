@@ -22,6 +22,11 @@ from .model_config import (
     OllamaModelConfig,
     OpenAIModelConfig,
 )
+from .toolset_config import (
+    ExcludeSpec,
+    ToolSetConfig,
+    ToolSpec,
+)
 
 __all__ = [
     "UserMessage",
@@ -39,4 +44,7 @@ __all__ = [
     "McpServerConfig",
     "StdioServerConfig",
     "RemoteServerConfig",
+    "ExcludeSpec",
+    "ToolSetConfig",
+    "ToolSpec",
 ]

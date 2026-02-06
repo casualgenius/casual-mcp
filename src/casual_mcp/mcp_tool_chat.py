@@ -15,7 +15,9 @@ from fastmcp import Client
 from casual_mcp.convert_tools import tools_from_mcp
 from casual_mcp.logging import get_logger
 from casual_mcp.models.chat_stats import ChatStats
+from casual_mcp.models.toolset_config import ToolSetConfig
 from casual_mcp.tool_cache import ToolCache
+from casual_mcp.tool_filter import filter_tools_by_toolset
 from casual_mcp.utils import format_tool_call_result
 
 logger = get_logger("mcp_tool_chat")
@@ -45,11 +47,13 @@ class McpToolChat:
         provider: LLMProvider,
         system: str | None = None,
         tool_cache: ToolCache | None = None,
+        server_names: set[str] | None = None,
     ):
         self.provider = provider
         self.mcp_client = mcp_client
         self.system = system
         self.tool_cache = tool_cache or ToolCache(mcp_client)
+        self.server_names = server_names or set()
         self._tool_cache_version = -1
         self._last_stats: ChatStats | None = None
 
@@ -80,7 +84,12 @@ class McpToolChat:
             return tool_name.split("_", 1)[0]
         return "default"
 
-    async def generate(self, prompt: str, session_id: str | None = None) -> list[ChatMessage]:
+    async def generate(
+        self,
+        prompt: str,
+        session_id: str | None = None,
+        tool_set: ToolSetConfig | None = None,
+    ) -> list[ChatMessage]:
         # Fetch the session if we have a session ID
         messages: list[ChatMessage]
         if session_id:
@@ -97,7 +106,7 @@ class McpToolChat:
             add_messages_to_session(session_id, [user_message])
 
         # Perform Chat
-        response = await self.chat(messages=messages)
+        response = await self.chat(messages=messages, tool_set=tool_set)
 
         # Add responses to session
         if session_id:
@@ -105,8 +114,17 @@ class McpToolChat:
 
         return response
 
-    async def chat(self, messages: list[ChatMessage]) -> list[ChatMessage]:
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        tool_set: ToolSetConfig | None = None,
+    ) -> list[ChatMessage]:
         tools = await self.tool_cache.get_tools()
+
+        # Filter tools if a toolset is specified
+        if tool_set is not None:
+            tools = filter_tools_by_toolset(tools, tool_set, self.server_names, validate=True)
+            logger.info(f"Filtered to {len(tools)} tools using toolset")
 
         # Reset stats at the start of each chat
         self._last_stats = ChatStats()

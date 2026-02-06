@@ -44,25 +44,59 @@
     "servers": {
         "math": {
             "command": "python",
-            "args": ["mcp-servers/math/server.py"]
+            "args": [
+                "mcp-servers/math/server.py"
+            ]
         },
         "time": {
             "command": "python",
-            "args": ["mcp-servers/time/server.py"]
+            "args": [
+                "mcp-servers/time/server.py"
+            ]
         },
         "weather": {
             "command": "python",
-            "args": ["mcp-servers/weather/server.py"]
+            "args": [
+                "mcp-servers/weather/server.py"
+            ]
         },
         "words": {
             "command": "python",
-            "args": ["mcp-servers/words/server.py"]
+            "args": [
+                "mcp-servers/words/server.py"
+            ]
         },
         "fetch": {
             "command": "npx",
-            "args": ["-y", "@lmcc-dev/mult-fetch-mcp-server"],
+            "args": [
+                "-y",
+                "@lmcc-dev/mult-fetch-mcp-server"
+            ],
             "env": {
                 "MCP_LANG": "en"
+            }
+        }
+    },
+    "tool_sets": {
+        "basic": {
+            "description": "Basic tools for time and math",
+            "servers": {
+                "math": true,
+                "time": [
+                    "current_time"
+                ]
+            }
+        },
+        "research": {
+            "description": "Research tools for weather and words",
+            "servers": {
+                "weather": true,
+                "words": {
+                    "exclude": [
+                        "random_word"
+                    ]
+                },
+                "fetch": true
             }
         }
     }
