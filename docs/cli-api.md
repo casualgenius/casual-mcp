@@ -77,6 +77,20 @@ Servers:
 
 List available tools from all connected MCP servers.
 
+Example output:
+
+```
+$ casual-mcp tools
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Name                   ┃ Description                                         ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ math_add               │ Add two numbers together                            │
+│ math_multiply          │ Multiply two numbers                                │
+│ time_current_time      │ Get the current time in a specified timezone        │
+│ weather_get_forecast   │ Get weather forecast for a location                 │
+└────────────────────────┴─────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## API Endpoints
@@ -160,6 +174,40 @@ Send a prompt with optional session management.
 ### GET /generate/session/{session_id}
 
 Retrieve all messages from a session.
+
+**Example Request:**
+
+```bash
+curl http://localhost:8000/generate/session/my-session
+```
+
+**Response (200 OK):**
+
+Returns an array of chat messages from the session:
+
+```json
+[
+    {
+        "role": "user",
+        "content": "What time is it?"
+    },
+    {
+        "role": "assistant",
+        "content": "The current time is 3:45 PM.",
+        "tool_calls": null
+    }
+]
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+    "detail": "Session not found"
+}
+```
+
+> **Note:** Sessions are stored in-memory and cleared on server restart. Use sessions for testing/development only.
 
 ### GET /toolsets
 

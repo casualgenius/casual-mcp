@@ -179,7 +179,12 @@ class McpToolChat:
                         f"Failed to execute tool '{tool_call.function.name}' "
                         f"(id={tool_call.id}): {e}"
                     )
-                    continue
+                    # Surface the failure to the LLM so it knows the tool failed
+                    result = ToolResultMessage(
+                        name=tool_call.function.name,
+                        tool_call_id=tool_call.id,
+                        content=f"Error executing tool: {e}",
+                    )
                 if result:
                     messages.append(result)
                     response_messages.append(result)

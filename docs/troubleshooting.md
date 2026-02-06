@@ -89,7 +89,7 @@ Tools are cached with a 30-second TTL by default. If you add/remove MCP servers:
     },
     "ollama-model": {
       "provider": "ollama",
-      "model": "qwen2.5:7b"
+      "model": "qwen2.5:7b-instruct"
     }
   }
 }

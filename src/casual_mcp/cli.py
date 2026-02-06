@@ -84,8 +84,9 @@ def tools() -> None:
 def run_async_with_cleanup(coro: Any) -> Any:
     """Run async coroutine with proper subprocess cleanup.
 
-    This wrapper suppresses the RuntimeError from subprocess transports
-    that occurs when the event loop closes before transports finish cleanup.
+    This wrapper filters/ignores the "Event loop is closed" warning that occurs
+    when subprocess transports don't finish cleanup before the event loop closes.
+    It also forces gc.collect() after execution to help clean up remaining transports.
     """
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Event loop is closed")
@@ -226,6 +227,15 @@ def _delete_toolset(config_path: Path, name: str) -> None:
 
     with config_path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
+
+    # Check if tool_sets exists and contains the toolset
+    if "tool_sets" not in raw:
+        console.print("[red]No toolsets found in config[/red]")
+        return
+
+    if name not in raw["tool_sets"]:
+        console.print(f"[red]Toolset '{name}' not found in config[/red]")
+        return
 
     del raw["tool_sets"][name]
 
