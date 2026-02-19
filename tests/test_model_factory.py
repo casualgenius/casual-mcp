@@ -25,12 +25,8 @@ class TestModelFactory:
     def config(self):
         return make_config(
             clients={
-                "openai": McpClientConfig(
-                    provider="openai", base_url="https://api.openai.com/v1"
-                ),
-                "ollama": McpClientConfig(
-                    provider="ollama", base_url="http://localhost:11434"
-                ),
+                "openai": McpClientConfig(provider="openai", base_url="https://api.openai.com/v1"),
+                "ollama": McpClientConfig(provider="ollama", base_url="http://localhost:11434"),
             },
             models={
                 "test-model": McpModelConfig(client="openai", model="gpt-4"),
@@ -40,9 +36,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_creates_openai_model(
-        self, mock_create_client, mock_create_model, config
-    ):
+    def test_get_model_creates_openai_model(self, mock_create_client, mock_create_model, config):
         """Test creating OpenAI model."""
         mock_create_client.return_value = Mock()
         mock_create_model.return_value = Mock()
@@ -56,9 +50,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_creates_ollama_model(
-        self, mock_create_client, mock_create_model, config
-    ):
+    def test_get_model_creates_ollama_model(self, mock_create_client, mock_create_model, config):
         """Test creating Ollama model."""
         mock_create_client.return_value = Mock()
         mock_create_model.return_value = Mock()
@@ -72,9 +64,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_caches_model(
-        self, mock_create_client, mock_create_model, config
-    ):
+    def test_get_model_caches_model(self, mock_create_client, mock_create_model, config):
         """Test that model is cached."""
         mock_create_client.return_value = Mock()
         mock_create_model.return_value = Mock()
@@ -89,9 +79,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_creates_different_models(
-        self, mock_create_client, mock_create_model
-    ):
+    def test_get_model_creates_different_models(self, mock_create_client, mock_create_model):
         """Test that different model names create different models."""
         config = make_config(
             clients={"openai": McpClientConfig(provider="openai")},
@@ -153,9 +141,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_passes_explicit_api_key(
-        self, mock_create_client, mock_create_model
-    ):
+    def test_get_model_passes_explicit_api_key(self, mock_create_client, mock_create_model):
         """Test that explicit api_key in config is passed through."""
         config = make_config(
             clients={"openai": McpClientConfig(provider="openai", api_key="explicit-key")},
@@ -200,9 +186,7 @@ class TestModelFactory:
         config = make_config(
             clients={
                 "openai": McpClientConfig(provider="openai"),
-                "ollama": McpClientConfig(
-                    provider="ollama", base_url="http://localhost:11434"
-                ),
+                "ollama": McpClientConfig(provider="ollama", base_url="http://localhost:11434"),
             },
             models={
                 "model1": McpModelConfig(client="openai", model="gpt-4"),
@@ -224,9 +208,7 @@ class TestModelFactory:
         """Test that temperature is passed through to ModelConfig."""
         config = make_config(
             clients={"openai": McpClientConfig(provider="openai")},
-            models={
-                "test": McpModelConfig(client="openai", model="gpt-4", temperature=0.7)
-            },
+            models={"test": McpModelConfig(client="openai", model="gpt-4", temperature=0.7)},
         )
         mock_create_client.return_value = Mock()
         mock_create_model.return_value = Mock()
@@ -239,9 +221,7 @@ class TestModelFactory:
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")
-    def test_get_model_passes_provider_as_string(
-        self, mock_create_client, mock_create_model
-    ):
+    def test_get_model_passes_provider_as_string(self, mock_create_client, mock_create_model):
         """Test that provider string is passed directly to ClientConfig."""
         config = make_config(
             clients={"openai": McpClientConfig(provider="openai")},
