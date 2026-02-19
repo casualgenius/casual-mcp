@@ -17,7 +17,7 @@ from casual_mcp.logging import get_logger
 from casual_mcp.models.chat_stats import ChatStats
 from casual_mcp.models.toolset_config import ToolSetConfig
 from casual_mcp.tool_cache import ToolCache
-from casual_mcp.tool_filter import filter_tools_by_toolset
+from casual_mcp.tool_filter import extract_server_and_tool, filter_tools_by_toolset
 from casual_mcp.utils import format_tool_call_result
 
 logger = get_logger("mcp_tool_chat")
@@ -73,19 +73,6 @@ class McpToolChat:
         Stats are reset at the start of each new chat()/generate() call.
         """
         return self._last_stats
-
-    def _extract_server_from_tool_name(self, tool_name: str) -> str:
-        """
-        Extract server name from a tool name.
-
-        With multiple servers, fastmcp prefixes tools as "serverName_toolName".
-        With a single server, tools are not prefixed.
-
-        Returns the server name or "default" if it cannot be determined.
-        """
-        if "_" in tool_name:
-            return tool_name.split("_", 1)[0]
-        return "default"
 
     async def generate(
         self,
@@ -201,7 +188,7 @@ class McpToolChat:
                 self._last_stats.tool_calls.by_tool[tool_name] = (
                     self._last_stats.tool_calls.by_tool.get(tool_name, 0) + 1
                 )
-                server_name = self._extract_server_from_tool_name(tool_name)
+                server_name, _ = extract_server_and_tool(tool_name, self.server_names)
                 self._last_stats.tool_calls.by_server[server_name] = (
                     self._last_stats.tool_calls.by_server.get(server_name, 0) + 1
                 )

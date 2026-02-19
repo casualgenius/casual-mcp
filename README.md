@@ -92,9 +92,11 @@ See [Configuration Guide](docs/configuration.md) for full details on models, ser
 ```bash
 casual-mcp serve              # Start API server
 casual-mcp servers            # List configured servers
+casual-mcp clients            # List configured clients
 casual-mcp models             # List configured models
 casual-mcp toolsets           # Manage toolsets interactively
 casual-mcp tools              # List available tools
+casual-mcp migrate-config     # Migrate legacy config to new format
 ```
 
 See [CLI & API Reference](docs/cli-api.md) for all commands and options.

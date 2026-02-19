@@ -38,7 +38,7 @@ class ModelFactory:
                 provider=client_config.provider,
                 name=client_name,
                 base_url=client_config.base_url,
-                api_key=client_config.api_key,
+                api_key=client_config.api_key.get_secret_value() if client_config.api_key else None,
                 timeout=client_config.timeout,
             )
         )
@@ -76,7 +76,3 @@ class ModelFactory:
 
         self._models[name] = model
         return model
-
-
-# Backwards compatibility alias
-ProviderFactory = ModelFactory

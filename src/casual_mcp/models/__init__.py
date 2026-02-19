@@ -24,10 +24,6 @@ from .toolset_config import (
     ToolSpec,
 )
 
-# Deprecated aliases for backwards compatibility
-OpenAIModelConfig = McpModelConfig
-OllamaModelConfig = McpModelConfig
-
 __all__ = [
     "UserMessage",
     "AssistantMessage",
@@ -40,8 +36,6 @@ __all__ = [
     "ToolCallStats",
     "McpClientConfig",
     "McpModelConfig",
-    "OpenAIModelConfig",
-    "OllamaModelConfig",
     "McpServerConfig",
     "StdioServerConfig",
     "RemoteServerConfig",

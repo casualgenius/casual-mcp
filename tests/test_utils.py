@@ -66,35 +66,19 @@ class TestLoadConfig:
         assert "openai" in config.clients
         assert config.clients["openai"].provider == "openai"
 
-    def test_load_legacy_config_migrates(self, tmp_path):
-        """Test that legacy config with provider/endpoint in models is auto-migrated."""
+    def test_load_legacy_config_rejected(self, tmp_path):
+        """Test that legacy config without clients is rejected."""
         config_file = tmp_path / "config.json"
         config_data = {
             "models": {
                 "test-model": {"provider": "openai", "model": "gpt-4"},
-                "ollama-model": {
-                    "provider": "ollama",
-                    "model": "llama2",
-                    "endpoint": "http://localhost:11434",
-                },
             },
             "servers": {},
         }
         config_file.write_text(json.dumps(config_data))
 
-        import warnings
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            config = load_config(str(config_file))
-            assert any("legacy format" in str(warning.message) for warning in w)
-
-        assert "openai" in config.clients
-        assert config.clients["openai"].provider == "openai"
-        assert "ollama" in config.clients
-        assert config.clients["ollama"].base_url == "http://localhost:11434"
-        assert config.models["test-model"].client == "openai"
-        assert config.models["ollama-model"].client == "ollama"
+        with pytest.raises(ValueError, match="Invalid config"):
+            load_config(str(config_file))
 
     def test_load_missing_file_raises(self):
         """Test that missing file raises FileNotFoundError."""

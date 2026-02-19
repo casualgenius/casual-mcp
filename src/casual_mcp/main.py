@@ -159,7 +159,12 @@ async def list_toolsets() -> dict[str, dict[str, Any]]:
 
 async def get_chat(model: str, system: str | None = None) -> McpToolChat:
     # Get Model from Model Config
-    model_config = config.models[model]
+    model_config = config.models.get(model)
+    if model_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model}' not found. Available: {list(config.models.keys())}",
+        )
     llm_model = model_factory.get_model(model)
 
     # Get the system prompt

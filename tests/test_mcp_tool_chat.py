@@ -432,7 +432,9 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
+        chat = McpToolChat(
+            mock_client, model, "System", mock_tool_cache, server_names={"math", "words"}
+        )
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
@@ -466,12 +468,12 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
+        # No server_names provided, so all tools fall back to "default"
         chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
         await chat.chat([UserMessage(content="Test")])
 
         stats = chat.get_stats()
-        # "simple_tool" has underscore so splits to "simple" as server
-        assert stats.tool_calls.by_server == {"simple": 1}
+        assert stats.tool_calls.by_server == {"default": 1}
 
     async def test_stats_handle_no_usage_from_model(self, mock_client, mock_tool_cache):
         """Test that stats handle models that return None for usage."""
@@ -488,12 +490,37 @@ class TestMcpToolChatStats:
         assert stats.tokens.completion_tokens == 0
         assert stats.llm_calls == 1
 
-    def test_extract_server_from_tool_name(self, mock_client, mock_tool_cache):
-        """Test server name extraction from tool names."""
-        model = AsyncMock()
-        chat = McpToolChat(mock_client, model, "System", mock_tool_cache)
+    async def test_stats_use_extract_server_and_tool(self, mock_client, mock_tool_cache):
+        """Test that stats use extract_server_and_tool with server_names for attribution."""
+        from casual_llm import Usage
 
-        assert chat._extract_server_from_tool_name("math_add") == "math"
-        assert chat._extract_server_from_tool_name("words_define") == "words"
-        assert chat._extract_server_from_tool_name("server_name_tool") == "server"
-        assert chat._extract_server_from_tool_name("notool") == "default"
+        tool_call = AssistantToolCall(
+            id="call_1",
+            function=AssistantToolCallFunction(name="my_awesome_add", arguments="{}"),
+        )
+
+        model = AsyncMock()
+        model.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[tool_call]),
+                AssistantMessage(content="Final response"),
+            ]
+        )
+        model.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        # With server_names containing "my_awesome", the tool should be attributed correctly
+        chat = McpToolChat(
+            mock_client, model, "System", mock_tool_cache, server_names={"my_awesome"}
+        )
+        await chat.chat([UserMessage(content="Test")])
+
+        stats = chat.get_stats()
+        assert stats.tool_calls.by_server == {"my_awesome": 1}
