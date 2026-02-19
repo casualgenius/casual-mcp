@@ -56,16 +56,31 @@ def servers() -> None:
 
 
 @app.command()
+def clients() -> None:
+    """
+    Return a table of all configured clients
+    """
+    config = load_config("casual_mcp_config.json")
+    table = Table("Name", "Provider", "Base URL", "Timeout")
+
+    for name, client in config.clients.items():
+        base_url = client.base_url or "(default)"
+        table.add_row(name, client.provider, base_url, str(client.timeout))
+
+    console.print(table)
+
+
+@app.command()
 def models() -> None:
     """
     Return a table of all configured models
     """
     config = load_config("casual_mcp_config.json")
-    table = Table("Name", "Provider", "Model", "Endpoint")
+    table = Table("Name", "Client", "Model", "Template")
 
     for name, model in config.models.items():
-        endpoint = model.endpoint or ""
-        table.add_row(name, model.provider, model.model, str(endpoint))
+        template = model.template or ""
+        table.add_row(name, model.client, model.model, template)
 
     console.print(table)
 

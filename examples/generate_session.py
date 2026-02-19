@@ -30,11 +30,10 @@ async def main():
             print(f"  - {name}")
         return
 
-    model_config = config.models[MODEL_NAME]
-    model_factory = ModelFactory()
-    llm_model = model_factory.get_model(MODEL_NAME, model_config)
+    model_factory = ModelFactory(config)
+    llm_model = model_factory.get_model(MODEL_NAME)
 
-    print(f"Model: {MODEL_NAME} ({model_config.provider})")
+    print(f"Model: {MODEL_NAME}")
 
     chat = McpToolChat(
         mcp_client=mcp_client,

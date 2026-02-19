@@ -12,21 +12,21 @@ from .chat_stats import (
     TokenUsageStats,
     ToolCallStats,
 )
+from .config import McpClientConfig, McpModelConfig
 from .mcp_server_config import (
     McpServerConfig,
     RemoteServerConfig,
     StdioServerConfig,
-)
-from .model_config import (
-    McpModelConfig,
-    OllamaModelConfig,
-    OpenAIModelConfig,
 )
 from .toolset_config import (
     ExcludeSpec,
     ToolSetConfig,
     ToolSpec,
 )
+
+# Deprecated aliases for backwards compatibility
+OpenAIModelConfig = McpModelConfig
+OllamaModelConfig = McpModelConfig
 
 __all__ = [
     "UserMessage",
@@ -38,9 +38,10 @@ __all__ = [
     "ChatStats",
     "TokenUsageStats",
     "ToolCallStats",
+    "McpClientConfig",
     "McpModelConfig",
-    "OllamaModelConfig",
     "OpenAIModelConfig",
+    "OllamaModelConfig",
     "McpServerConfig",
     "StdioServerConfig",
     "RemoteServerConfig",

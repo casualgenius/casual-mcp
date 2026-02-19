@@ -8,7 +8,7 @@
 ## Features
 
 - Multi-server MCP client using [FastMCP](https://github.com/jlowin/fastmcp)
-- OpenAI and Ollama provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
+- OpenAI, Ollama, and Anthropic provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
 - Recursive tool-calling chat loop
 - Toolsets for selective tool filtering per request
 - Usage statistics tracking (tokens, tool calls, LLM calls)
@@ -39,8 +39,11 @@ uv sync --group dev
 
 ```json
 {
+  "clients": {
+    "openai": { "provider": "openai" }
+  },
   "models": {
-    "gpt-4.1": { "provider": "openai", "model": "gpt-4.1" }
+    "gpt-4.1": { "client": "openai", "model": "gpt-4.1" }
   },
   "servers": {
     "time": { "command": "python", "args": ["mcp-servers/time/server.py"] }
@@ -62,12 +65,15 @@ curl -X POST http://localhost:8000/generate \
 
 ## Configuration
 
-Configure models, MCP servers, and toolsets in `casual_mcp_config.json`.
+Configure clients, models, MCP servers, and toolsets in `casual_mcp_config.json`.
 
 ```json
 {
+  "clients": {
+    "openai": { "provider": "openai" }
+  },
   "models": {
-    "gpt-4.1": { "provider": "openai", "model": "gpt-4.1" }
+    "gpt-4.1": { "client": "openai", "model": "gpt-4.1" }
   },
   "servers": {
     "time": { "command": "python", "args": ["server.py"] },
@@ -113,8 +119,8 @@ from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 
-model_factory = ModelFactory()
-llm_model = model_factory.get_model("gpt-4.1", config.models["gpt-4.1"])
+model_factory = ModelFactory(config)
+llm_model = model_factory.get_model("gpt-4.1")
 
 chat = McpToolChat(mcp_client, llm_model)
 messages = [
@@ -154,7 +160,7 @@ Casual MCP orchestrates LLMs and MCP tool servers in a recursive loop:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | - | Required for OpenAI provider |
+| `{CLIENT_NAME}_API_KEY` | - | API key lookup: tries `{CLIENT_NAME.upper()}_API_KEY` first, falls back to provider default (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) |
 | `TOOL_RESULT_FORMAT` | `result` | `result`, `function_result`, or `function_args_result` |
 | `MCP_TOOL_CACHE_TTL` | `30` | Tool cache TTL in seconds (0 = indefinite) |
 | `LOG_LEVEL` | `INFO` | Logging level |

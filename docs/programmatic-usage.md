@@ -19,8 +19,8 @@ config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 
 # Get model and run chat
-model_factory = ModelFactory()
-llm_model = model_factory.get_model(model, config.models[model])
+model_factory = ModelFactory(config)
+llm_model = model_factory.get_model(model)
 
 chat = McpToolChat(mcp_client, llm_model)
 response_messages = await chat.chat(messages)
@@ -57,13 +57,13 @@ response = await chat.chat(messages)
 
 ### ModelFactory
 
-Creates LLM clients and models from casual-llm based on model config. Clients are cached by provider+endpoint, models by name.
+Creates LLM clients and models from casual-llm based on config. Clients are cached by name, models by name.
 
 ```python
 from casual_mcp import ModelFactory
 
-model_factory = ModelFactory()
-llm_model = model_factory.get_model("gpt-4.1", model_config)
+model_factory = ModelFactory(config)
+llm_model = model_factory.get_model("gpt-4.1")
 ```
 
 ### load_config / load_mcp_client
@@ -158,12 +158,12 @@ messages = [
 ]
 ```
 
-## Model and Server Config Types
+## Config Types
 
 ```python
 from casual_mcp.models import (
-    OpenAIModelConfig,
-    OllamaModelConfig,
+    McpClientConfig,
+    McpModelConfig,
     StdioServerConfig,
     RemoteServerConfig,
     ToolSetConfig,
@@ -184,7 +184,7 @@ Use Jinja2 templates to format tools in the system prompt:
 {
   "models": {
     "custom-model": {
-      "provider": "ollama",
+      "client": "ollama",
       "model": "some-model:7b",
       "template": "custom-tool-format"
     }

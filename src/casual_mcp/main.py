@@ -24,7 +24,7 @@ logger = get_logger("main")
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 tool_cache = ToolCache(mcp_client)
-model_factory = ModelFactory()
+model_factory = ModelFactory(config)
 
 app = FastAPI()
 
@@ -160,7 +160,7 @@ async def list_toolsets() -> dict[str, dict[str, Any]]:
 async def get_chat(model: str, system: str | None = None) -> McpToolChat:
     # Get Model from Model Config
     model_config = config.models[model]
-    llm_model = model_factory.get_model(model, model_config)
+    llm_model = model_factory.get_model(model)
 
     # Get the system prompt
     if not system:

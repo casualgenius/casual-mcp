@@ -32,9 +32,8 @@ async def main():
             print(f"  - {name}")
         return
 
-    model_config = config.models[MODEL_NAME]
-    model_factory = ModelFactory()
-    llm_model = model_factory.get_model(MODEL_NAME, model_config)
+    model_factory = ModelFactory(config)
+    llm_model = model_factory.get_model(MODEL_NAME)
 
     chat = McpToolChat(
         mcp_client=mcp_client,
@@ -51,7 +50,7 @@ async def main():
 
     response_messages = await chat.chat(messages)
 
-    print(f"Model: {MODEL_NAME} ({model_config.provider})")
+    print(f"Model: {MODEL_NAME}")
     print("\nSummarise https://www.anthropic.com/news/model-context-protocol\n")
     tool_count = sum(1 for m in response_messages if m.role == "tool")
     print(f"\nResponse: {len(response_messages)} messages, {tool_count} tool results")
