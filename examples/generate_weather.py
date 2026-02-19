@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from casual_mcp.logging import configure_logging
 from casual_mcp.mcp_tool_chat import McpToolChat
-from casual_mcp.provider_factory import ProviderFactory
+from casual_mcp.model_factory import ModelFactory
 from casual_mcp.utils import load_config, load_mcp_client
 
 load_dotenv()
@@ -30,15 +30,14 @@ async def main():
             print(f"  - {name}")
         return
 
-    model_config = config.models[MODEL_NAME]
-    provider_factory = ProviderFactory()
-    provider = provider_factory.get_provider(MODEL_NAME, model_config)
+    model_factory = ModelFactory(config)
+    llm_model = model_factory.get_model(MODEL_NAME)
 
-    print(f"Model: {MODEL_NAME} ({model_config.provider})")
+    print(f"Model: {MODEL_NAME}")
 
     chat = McpToolChat(
         mcp_client=mcp_client,
-        provider=provider,
+        model=llm_model,
     )
 
     tools = await chat.tool_cache.get_tools()

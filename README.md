@@ -8,7 +8,7 @@
 ## Features
 
 - Multi-server MCP client using [FastMCP](https://github.com/jlowin/fastmcp)
-- OpenAI and Ollama provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
+- OpenAI, Ollama, and Anthropic provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
 - Recursive tool-calling chat loop
 - Toolsets for selective tool filtering per request
 - Usage statistics tracking (tokens, tool calls, LLM calls)
@@ -39,8 +39,11 @@ uv sync --group dev
 
 ```json
 {
+  "clients": {
+    "openai": { "provider": "openai" }
+  },
   "models": {
-    "gpt-4.1": { "provider": "openai", "model": "gpt-4.1" }
+    "gpt-4.1": { "client": "openai", "model": "gpt-4.1" }
   },
   "servers": {
     "time": { "command": "python", "args": ["mcp-servers/time/server.py"] }
@@ -62,12 +65,15 @@ curl -X POST http://localhost:8000/generate \
 
 ## Configuration
 
-Configure models, MCP servers, and toolsets in `casual_mcp_config.json`.
+Configure clients, models, MCP servers, and toolsets in `casual_mcp_config.json`.
 
 ```json
 {
+  "clients": {
+    "openai": { "provider": "openai" }
+  },
   "models": {
-    "gpt-4.1": { "provider": "openai", "model": "gpt-4.1" }
+    "gpt-4.1": { "client": "openai", "model": "gpt-4.1" }
   },
   "servers": {
     "time": { "command": "python", "args": ["server.py"] },
@@ -86,9 +92,11 @@ See [Configuration Guide](docs/configuration.md) for full details on models, ser
 ```bash
 casual-mcp serve              # Start API server
 casual-mcp servers            # List configured servers
+casual-mcp clients            # List configured clients
 casual-mcp models             # List configured models
 casual-mcp toolsets           # Manage toolsets interactively
 casual-mcp tools              # List available tools
+casual-mcp migrate-config     # Migrate legacy config to new format
 ```
 
 See [CLI & API Reference](docs/cli-api.md) for all commands and options.
@@ -108,15 +116,15 @@ See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response fo
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ProviderFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
 
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 
-provider_factory = ProviderFactory()
-provider = provider_factory.get_provider("gpt-4.1", config.models["gpt-4.1"])
+model_factory = ModelFactory(config)
+llm_model = model_factory.get_model("gpt-4.1")
 
-chat = McpToolChat(mcp_client, provider)
+chat = McpToolChat(mcp_client, llm_model)
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it?")
@@ -147,14 +155,14 @@ Casual MCP orchestrates LLMs and MCP tool servers in a recursive loop:
 
 1. **MCP Client** connects to tool servers (local stdio or remote HTTP/SSE)
 2. **Tool Cache** fetches and caches tools from all servers
-3. **ProviderFactory** creates LLM providers from casual-llm
+3. **ModelFactory** creates LLM clients and models from casual-llm
 4. **McpToolChat** runs the recursive loop until the LLM provides a final answer
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | - | Required for OpenAI provider |
+| `{CLIENT_NAME}_API_KEY` | - | API key lookup: tries `{CLIENT_NAME.upper()}_API_KEY` first, falls back to provider default (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) |
 | `TOOL_RESULT_FORMAT` | `result` | `result`, `function_result`, or `function_args_result` |
 | `MCP_TOOL_CACHE_TTL` | `30` | Tool cache TTL in seconds (0 = indefinite) |
 | `LOG_LEVEL` | `INFO` | Logging level |

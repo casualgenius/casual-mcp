@@ -7,16 +7,24 @@ import pytest
 def sample_config_data():
     """Sample configuration data for tests."""
     return {
+        "clients": {
+            "openai": {
+                "provider": "openai",
+                "base_url": "https://api.openai.com/v1",
+            },
+            "ollama": {
+                "provider": "ollama",
+                "base_url": "http://localhost:11434",
+            },
+        },
         "models": {
             "gpt-4": {
-                "provider": "openai",
+                "client": "openai",
                 "model": "gpt-4",
-                "endpoint": "https://api.openai.com/v1",
             },
             "llama2": {
-                "provider": "ollama",
+                "client": "ollama",
                 "model": "llama2",
-                "endpoint": "http://localhost:11434",
             },
         },
         "servers": {"test-server": {"command": "python", "args": ["-m", "test_server"], "env": {}}},

@@ -56,16 +56,31 @@ def servers() -> None:
 
 
 @app.command()
+def clients() -> None:
+    """
+    Return a table of all configured clients
+    """
+    config = load_config("casual_mcp_config.json")
+    table = Table("Name", "Provider", "Base URL", "Timeout")
+
+    for name, client in config.clients.items():
+        base_url = client.base_url or "(default)"
+        table.add_row(name, client.provider, base_url, str(client.timeout))
+
+    console.print(table)
+
+
+@app.command()
 def models() -> None:
     """
     Return a table of all configured models
     """
     config = load_config("casual_mcp_config.json")
-    table = Table("Name", "Provider", "Model", "Endpoint")
+    table = Table("Name", "Client", "Model", "Template")
 
     for name, model in config.models.items():
-        endpoint = model.endpoint or ""
-        table.add_row(name, model.provider, model.model, str(endpoint))
+        template = model.template or ""
+        table.add_row(name, model.client, model.model, template)
 
     console.print(table)
 
@@ -129,6 +144,99 @@ def _format_tool_spec(spec: ToolSpec) -> str:
     elif isinstance(spec, ExcludeSpec):
         return f"\\[all except: {', '.join(spec.exclude)}]"
     return str(spec)
+
+
+def migrate_legacy_config(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Migrate old-style config (provider/endpoint in models) to new clients/models split.
+
+    Returns the migrated data, or None if no migration was needed.
+    """
+    # If clients already exist, assume new format
+    if "clients" in data and data["clients"]:
+        return None
+
+    models = data.get("models", {})
+    if not models:
+        return None
+
+    # Check if any model has "provider" (old style) rather than "client" (new style)
+    has_legacy = any(isinstance(m, dict) and "provider" in m for m in models.values())
+    if not has_legacy:
+        return None
+
+    # Build clients dict from unique (provider, endpoint) combos
+    clients: dict[str, dict[str, Any]] = {}
+    client_key_map: dict[tuple[str, str | None], str] = {}
+
+    for model_data in models.values():
+        if not isinstance(model_data, dict) or "provider" not in model_data:
+            continue
+        provider = model_data["provider"]
+        endpoint = model_data.get("endpoint")
+        key = (provider, endpoint)
+
+        if key not in client_key_map:
+            client_name = provider
+            # Deduplicate if multiple endpoints for same provider
+            suffix = 1
+            while client_name in clients:
+                suffix += 1
+                client_name = f"{provider}-{suffix}"
+
+            client_config: dict[str, Any] = {"provider": provider}
+            if endpoint:
+                client_config["base_url"] = endpoint
+            clients[client_name] = client_config
+            client_key_map[key] = client_name
+
+    # Rewrite models to reference clients
+    new_models: dict[str, dict[str, Any]] = {}
+    for model_name, model_data in models.items():
+        if not isinstance(model_data, dict):
+            new_models[model_name] = model_data
+            continue
+        provider = model_data.get("provider")
+        endpoint = model_data.get("endpoint")
+        key = (provider, endpoint)
+        client_name = client_key_map.get(key, provider)
+
+        new_model: dict[str, Any] = {
+            "client": client_name,
+            "model": model_data["model"],
+        }
+        for field in ("template", "temperature"):
+            if field in model_data:
+                new_model[field] = model_data[field]
+        new_models[model_name] = new_model
+
+    data["clients"] = clients
+    data["models"] = new_models
+    return data
+
+
+@app.command(name="migrate-config")
+def migrate_config(
+    config_file: str = typer.Argument("casual_mcp_config.json", help="Path to the config file"),
+) -> None:
+    """Migrate a legacy config file to the new clients/models format."""
+    config_path = Path(config_file)
+
+    if not config_path.exists():
+        console.print(f"[red]Config file not found: {config_path}[/red]")
+        raise typer.Exit(1)
+
+    with config_path.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    result = migrate_legacy_config(raw)
+    if result is None:
+        console.print("[green]Config is already in the new format. No migration needed.[/green]")
+        return
+
+    with config_path.open("w", encoding="utf-8") as f:
+        json.dump(result, f, indent=4)
+
+    console.print(f"[green]Migrated config saved to {config_path}[/green]")
 
 
 @app.command()

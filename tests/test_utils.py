@@ -53,7 +53,8 @@ class TestLoadConfig:
         """Test loading a valid config file."""
         config_file = tmp_path / "config.json"
         config_data = {
-            "models": {"test-model": {"provider": "openai", "model": "gpt-4"}},
+            "clients": {"openai": {"provider": "openai"}},
+            "models": {"test-model": {"client": "openai", "model": "gpt-4"}},
             "servers": {},
         }
         config_file.write_text(json.dumps(config_data))
@@ -61,7 +62,23 @@ class TestLoadConfig:
         config = load_config(str(config_file))
 
         assert "test-model" in config.models
-        assert config.models["test-model"].provider == "openai"
+        assert config.models["test-model"].client == "openai"
+        assert "openai" in config.clients
+        assert config.clients["openai"].provider == "openai"
+
+    def test_load_legacy_config_rejected(self, tmp_path):
+        """Test that legacy config without clients is rejected."""
+        config_file = tmp_path / "config.json"
+        config_data = {
+            "models": {
+                "test-model": {"provider": "openai", "model": "gpt-4"},
+            },
+            "servers": {},
+        }
+        config_file.write_text(json.dumps(config_data))
+
+        with pytest.raises(ValueError, match="Invalid config"):
+            load_config(str(config_file))
 
     def test_load_missing_file_raises(self):
         """Test that missing file raises FileNotFoundError."""

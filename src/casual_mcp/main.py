@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
 from casual_mcp.models.toolset_config import ToolSetConfig
-from casual_mcp.provider_factory import ProviderFactory
+from casual_mcp.model_factory import ModelFactory
 from casual_mcp.tool_cache import ToolCache
 from casual_mcp.tool_filter import ToolSetValidationError
 from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
@@ -24,7 +24,7 @@ logger = get_logger("main")
 config = load_config("casual_mcp_config.json")
 mcp_client = load_mcp_client(config)
 tool_cache = ToolCache(mcp_client)
-provider_factory = ProviderFactory()
+model_factory = ModelFactory(config)
 
 app = FastAPI()
 
@@ -158,9 +158,14 @@ async def list_toolsets() -> dict[str, dict[str, Any]]:
 
 
 async def get_chat(model: str, system: str | None = None) -> McpToolChat:
-    # Get Provider from Model Config
-    model_config = config.models[model]
-    provider = provider_factory.get_provider(model, model_config)
+    # Get Model from Model Config
+    model_config = config.models.get(model)
+    if model_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model}' not found. Available: {list(config.models.keys())}",
+        )
+    llm_model = model_factory.get_model(model)
 
     # Get the system prompt
     if not system:
@@ -172,7 +177,7 @@ async def get_chat(model: str, system: str | None = None) -> McpToolChat:
 
     return McpToolChat(
         mcp_client,
-        provider,
+        llm_model,
         system,
         tool_cache=tool_cache,
         server_names=set(config.servers.keys()),
