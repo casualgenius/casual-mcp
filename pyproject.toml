@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "casual-mcp"
-version = "0.7.1"
+version = "0.8.0"
 description = "Multi-server MCP client for LLM tool orchestration"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Alex Stansfield" }]
 dependencies = [
-    "casual-llm[openai]>=0.4.3,<0.5.0",
+    "casual-llm[openai]>=0.6.0",
     "dateparser>=1.2.1",
     "fastapi>=0.115.12",
     "fastmcp>=2.12.4",
@@ -70,7 +70,7 @@ dev = [
 ]
 
 [tool.bumpversion]
-current_version = "0.6.0"
+current_version = "0.8.0"
 commit = true
 tag = true
 

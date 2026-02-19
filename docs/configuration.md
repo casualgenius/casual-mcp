@@ -1,25 +1,36 @@
 # Configuration
 
-Casual MCP is configured via a `casual_mcp_config.json` file that defines available models, MCP tool servers, and optional toolsets.
+Casual MCP is configured via a `casual_mcp_config.json` file that defines available clients, models, MCP tool servers, and optional toolsets.
 
 ## Example Configuration
 
 ```json
 {
+  "clients": {
+    "openai": {
+      "provider": "openai"
+    },
+    "ollama": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "lm-studio": {
+      "provider": "openai",
+      "base_url": "http://localhost:1234/v1"
+    }
+  },
   "models": {
     "gpt-4.1": {
-      "provider": "openai",
+      "client": "openai",
       "model": "gpt-4.1"
     },
     "lm-qwen-3": {
-      "provider": "openai",
-      "endpoint": "http://localhost:1234/v1",
+      "client": "lm-studio",
       "model": "qwen3-8b",
       "template": "lm-studio-native-tools"
     },
     "ollama-qwen": {
-      "provider": "ollama",
-      "endpoint": "http://localhost:11434",
+      "client": "ollama",
       "model": "qwen2.5:7b-instruct"
     }
   },
@@ -35,16 +46,27 @@ Casual MCP is configured via a `casual_mcp_config.json` file that defines availa
 }
 ```
 
-## Models
+## Clients
 
-Each model entry has:
+Each client entry defines an LLM API connection. Multiple models can share the same client.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `provider` | Yes | `"openai"` or `"ollama"` |
+| `provider` | Yes | `"openai"`, `"ollama"`, or `"anthropic"` |
+| `base_url` | No | Custom API endpoint URL. For Ollama: defaults to `http://localhost:11434`. For OpenAI: use for local APIs like LM Studio |
+| `api_key` | No | API key override. Defaults to `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` env vars |
+| `timeout` | No | Request timeout in seconds (default: `60.0`) |
+
+## Models
+
+Each model entry references a client and specifies model-specific settings.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `client` | Yes | Name of a client defined in the `clients` section |
 | `model` | Yes | Model name (e.g., `gpt-4.1`, `qwen2.5:7b-instruct`) |
-| `endpoint` | No | Custom endpoint URL. For OpenAI: use for local APIs like LM Studio. For Ollama: defaults to `http://localhost:11434` |
 | `template` | No | Jinja2 template name for system prompt formatting |
+| `temperature` | No | Sampling temperature override |
 
 ## Servers
 
@@ -152,7 +174,7 @@ Reference templates in model config:
 {
   "models": {
     "custom-model": {
-      "provider": "ollama",
+      "client": "ollama",
       "model": "some-model:7b",
       "template": "custom-tool-format"
     }
@@ -166,20 +188,26 @@ Use typed models to build configs programmatically:
 
 ```python
 from casual_mcp.models import (
-    OpenAIModelConfig,
-    OllamaModelConfig,
+    McpClientConfig,
+    McpModelConfig,
     StdioServerConfig,
     RemoteServerConfig,
     ToolSetConfig,
     ExcludeSpec,
 )
 
-# Models
-openai_model = OpenAIModelConfig(provider="openai", model="gpt-4.1")
-ollama_model = OllamaModelConfig(
+# Clients
+openai_client = McpClientConfig(provider="openai")
+ollama_client = McpClientConfig(
     provider="ollama",
+    base_url="http://localhost:11434",
+)
+
+# Models
+gpt_model = McpModelConfig(client="openai", model="gpt-4.1")
+ollama_model = McpModelConfig(
+    client="ollama",
     model="qwen2.5:7b-instruct",
-    endpoint="http://localhost:11434"
 )
 
 # Servers
@@ -196,3 +224,7 @@ toolset = ToolSetConfig(
     }
 )
 ```
+
+## Legacy Config Migration
+
+Configs using the old format (with `provider` and `endpoint` directly in model entries) are automatically migrated at load time. A deprecation warning is emitted. Update your config to the new `clients`/`models` split to avoid the warning.

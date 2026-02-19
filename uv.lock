@@ -146,16 +146,16 @@ wheels = [
 
 [[package]]
 name = "casual-llm"
-version = "0.4.3"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
     { name = "ollama" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/06/418b70b401236aa3079758a58d9375f5f72fe3bcbadca39a09f3d0804cc9/casual_llm-0.4.3.tar.gz", hash = "sha256:4aeb217731fc3c738c09d433320c7547936eb3b668bf61ce97a5090c99a5c675", size = 48741, upload-time = "2026-01-29T10:23:22.295Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/40/50891b757ffdd0b57c3b1344cece8fd9537c9b5384aba153de68fcd1cc36/casual_llm-0.6.0.tar.gz", hash = "sha256:b3479bc08140479835c06f98b0828d9f7a86658f2c1885a64606c8bc9f69f690", size = 48094, upload-time = "2026-02-19T07:40:49.34Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/43/66d2691acfa016cf95ef93333065ed1b573e96415bc71cc4db6863fc0898/casual_llm-0.4.3-py3-none-any.whl", hash = "sha256:c7ff261b53cc0518df2f1be0dbbf0762c64e69235752d1edb2960d4969a92d92", size = 35653, upload-time = "2026-01-29T10:23:20.395Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/c6/ba0c4253a8d9f89200dd36fd26de8c7e8e7dbd20591cb5590bd0a7e49a73/casual_llm-0.6.0-py3-none-any.whl", hash = "sha256:0e5f7e2528cd230c7a2541068afa88e27a16259f5b67e973904bf281fa40a978", size = 36283, upload-time = "2026-02-19T07:40:47.9Z" },
 ]
 
 [package.optional-dependencies]
@@ -165,7 +165,7 @@ openai = [
 
 [[package]]
 name = "casual-mcp"
-version = "0.7.1"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "casual-llm", extra = ["openai"] },
@@ -195,7 +195,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "casual-llm", extras = ["openai"], specifier = ">=0.4.3,<0.5.0" },
+    { name = "casual-llm", extras = ["openai"], specifier = ">=0.6.0" },
     { name = "dateparser", specifier = ">=1.2.1" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.12.4" },

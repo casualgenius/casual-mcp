@@ -1,43 +1,49 @@
 {
+    "clients": {
+        "openai": {
+            "provider": "openai"
+        },
+        "ollama": {
+            "provider": "ollama",
+            "base_url": "http://localhost:11434"
+        }
+    },
     "models": {
         "ollama-llama3.1": {
-            "provider": "ollama",
-            "endpoint": "http://localhost:11434",
+            "client": "ollama",
             "model": "llama3.1:8b"
         },
         "ollama-qwen2.5-7b-instruct": {
-            "provider": "ollama",
-            "endpoint": "http://localhost:11434",
+            "client": "ollama",
             "model": "qwen2.5:7b-instruct"
         },
         "ollama-qwen2.5-7b-instruct-with-template": {
-            "provider": "ollama",
-            "endpoint": "http://localhost:11434",
+            "client": "ollama",
             "model": "qwen2.5:7b-instruct",
             "template": "ollama-tools"
         },
         "gpt-5": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-5"
         },
         "gpt-5-mini": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-5-mini"
         },
         "gpt-5-nano": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-5-nano"
         },
         "gpt-4.1": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-4.1"
         },
         "gpt-4.1-mini": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-4.1-mini"
         },
         "gpt-4.1-nano": {
-            "provider": "openai",
+            "client": "openai",
             "model": "gpt-4.1-nano"
         }
     },
