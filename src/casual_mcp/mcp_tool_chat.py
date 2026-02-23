@@ -52,6 +52,30 @@ def add_messages_to_session(session_id: str, messages: list[ChatMessage]) -> Non
 
 
 class McpToolChat:
+    """Orchestrates LLM chat with MCP tool calling and optional tool discovery.
+
+    Manages the recursive loop of sending messages to an LLM, executing any
+    tool calls via the MCP client (or synthetic tools), and feeding results
+    back until the LLM produces a final answer.
+
+    When tool discovery is enabled (via ``config`` / ``tool_discovery_config``),
+    tools from deferred servers are not sent to the LLM upfront. Instead a
+    synthetic ``search_tools`` tool is injected that the LLM can use to find
+    and load tools on demand.
+
+    Args:
+        mcp_client: The MCP client used to execute tool calls.
+        model: The casual-llm ``Model`` instance for LLM inference.
+        system: Optional system prompt prepended to conversations.
+        tool_cache: Optional ``ToolCache`` for caching tool listings.
+        server_names: Known MCP server names (used for tool-name parsing).
+        synthetic_tools: Additional synthetic tools handled internally.
+        config: Full application ``Config`` (enables tool discovery when
+            ``config.tool_discovery`` is present and enabled).
+        tool_discovery_config: Explicit ``ToolDiscoveryConfig`` override.
+            If not provided, falls back to ``config.tool_discovery``.
+    """
+
     def __init__(
         self,
         mcp_client: Client[Any],
