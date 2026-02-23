@@ -351,3 +351,43 @@ class TestEdgeCases:
         assert len(results) <= 1
         if results:
             assert results[0][0] == "search"
+
+    def test_small_corpus_fallback_two_tools_shared_term(self) -> None:
+        """BM25 IDF is zero/negative when a term appears in all docs of a small corpus.
+
+        The fallback token-overlap scoring should still return results.
+        """
+        tools = [
+            _make_tool("search_web", "Search the web"),
+            _make_tool("search_local", "Search local results"),
+        ]
+        server_map = {"search_web": "s1", "search_local": "s2"}
+        idx = ToolSearchIndex(tools, server_map)
+        # "search" appears in both documents, so BM25 IDF will be <= 0
+        results = idx.search("search")
+        assert len(results) == 2
+        names = {tool.name for _, tool in results}
+        assert names == {"search_web", "search_local"}
+
+    def test_small_corpus_fallback_unique_term_still_found(self) -> None:
+        """In a two-tool corpus a term unique to one tool may still get IDF=0.
+
+        The token overlap fallback should find it.
+        """
+        tools = [
+            _make_tool("read_file", "Read a file from disk"),
+            _make_tool("write_file", "Write a file to disk"),
+        ]
+        server_map = {"read_file": "fs", "write_file": "fs"}
+        idx = ToolSearchIndex(tools, server_map)
+        results = idx.search("read")
+        assert len(results) >= 1
+        assert results[0][1].name == "read_file"
+
+    def test_get_by_server_with_missing_mapping(self) -> None:
+        """Tools not in the server map should appear under 'unknown' server."""
+        tool = _make_tool("unmapped_tool", "Some tool")
+        idx = ToolSearchIndex([tool], {})
+        results = idx.get_by_server("unknown")
+        assert len(results) == 1
+        assert results[0][1].name == "unmapped_tool"
