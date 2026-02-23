@@ -1,6 +1,8 @@
 """Tests for tool discovery configuration models."""
 
 import json
+from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -69,6 +71,23 @@ class TestToolDiscoveryConfig:
         json_str = original.model_dump_json()
         restored = ToolDiscoveryConfig.model_validate_json(json_str)
         assert original == restored
+
+    def test_max_search_results_boundary_at_one(self) -> None:
+        """Test that max_search_results accepts exactly 1 (minimum valid)."""
+        config = ToolDiscoveryConfig(max_search_results=1)
+        assert config.max_search_results == 1
+
+    def test_max_search_results_rejects_non_integer(self) -> None:
+        """Test that max_search_results rejects non-numeric strings."""
+        with pytest.raises(ValidationError):
+            ToolDiscoveryConfig(max_search_results="abc")  # type: ignore[arg-type]
+
+    def test_empty_dict_uses_all_defaults(self) -> None:
+        """Test that an empty dict produces a config with all defaults."""
+        config = ToolDiscoveryConfig.model_validate({})
+        assert config.enabled is False
+        assert config.defer_all is False
+        assert config.max_search_results == 5
 
 
 class TestStdioServerConfigDeferLoading:
@@ -144,7 +163,7 @@ class TestConfigWithToolDiscovery:
     """Tests for tool_discovery field on Config model."""
 
     @pytest.fixture
-    def minimal_config_data(self) -> dict:  # type: ignore[type-arg]
+    def minimal_config_data(self) -> dict[str, Any]:
         """Return minimal valid config data."""
         return {
             "clients": {"openai": {"provider": "openai"}},
@@ -152,12 +171,12 @@ class TestConfigWithToolDiscovery:
             "servers": {"test": {"command": "python", "args": ["server.py"]}},
         }
 
-    def test_config_without_tool_discovery(self, minimal_config_data: dict) -> None:  # type: ignore[type-arg]
+    def test_config_without_tool_discovery(self, minimal_config_data: dict[str, Any]) -> None:
         """Test that existing configs without tool_discovery still parse."""
         config = Config.model_validate(minimal_config_data)
         assert config.tool_discovery is None
 
-    def test_config_with_tool_discovery(self, minimal_config_data: dict) -> None:  # type: ignore[type-arg]
+    def test_config_with_tool_discovery(self, minimal_config_data: dict[str, Any]) -> None:
         """Test config with tool_discovery section."""
         minimal_config_data["tool_discovery"] = {
             "enabled": True,
@@ -170,7 +189,16 @@ class TestConfigWithToolDiscovery:
         assert config.tool_discovery.defer_all is False
         assert config.tool_discovery.max_search_results == 10
 
-    def test_config_with_partial_tool_discovery(self, minimal_config_data: dict) -> None:  # type: ignore[type-arg]
+    def test_config_with_empty_tool_discovery(self, minimal_config_data: dict[str, Any]) -> None:
+        """Test config with empty tool_discovery dict uses all defaults."""
+        minimal_config_data["tool_discovery"] = {}
+        config = Config.model_validate(minimal_config_data)
+        assert config.tool_discovery is not None
+        assert config.tool_discovery.enabled is False
+        assert config.tool_discovery.defer_all is False
+        assert config.tool_discovery.max_search_results == 5
+
+    def test_config_with_partial_tool_discovery(self, minimal_config_data: dict[str, Any]) -> None:
         """Test config with partial tool_discovery (uses defaults)."""
         minimal_config_data["tool_discovery"] = {"enabled": True}
         config = Config.model_validate(minimal_config_data)
@@ -179,7 +207,7 @@ class TestConfigWithToolDiscovery:
         assert config.tool_discovery.defer_all is False
         assert config.tool_discovery.max_search_results == 5
 
-    def test_config_with_defer_loading_servers(self, minimal_config_data: dict) -> None:  # type: ignore[type-arg]
+    def test_config_with_defer_loading_servers(self, minimal_config_data: dict[str, Any]) -> None:
         """Test config with servers using defer_loading."""
         minimal_config_data["servers"] = {
             "eager-server": {"command": "python", "args": ["eager.py"]},
@@ -212,7 +240,7 @@ class TestConfigWithToolDiscovery:
         assert isinstance(remote, RemoteServerConfig)
         assert remote.defer_loading is True
 
-    def test_full_config_json_roundtrip(self, minimal_config_data: dict) -> None:  # type: ignore[type-arg]
+    def test_full_config_json_roundtrip(self, minimal_config_data: dict[str, Any]) -> None:
         """Test that a full config with tool_discovery round-trips through JSON."""
         minimal_config_data["tool_discovery"] = {
             "enabled": True,
@@ -238,7 +266,7 @@ class TestConfigWithToolDiscovery:
         assert isinstance(deferred, StdioServerConfig)
         assert deferred.defer_loading is True
 
-    def test_config_json_file_backward_compat(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_config_json_file_backward_compat(self, tmp_path: Path) -> None:
         """Test that loading a config JSON file without tool_discovery works."""
         config_data = {
             "clients": {"openai": {"provider": "openai"}},
@@ -258,7 +286,7 @@ class TestConfigWithToolDiscovery:
         assert isinstance(server, StdioServerConfig)
         assert server.defer_loading is False
 
-    def test_config_json_file_with_tool_discovery(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_config_json_file_with_tool_discovery(self, tmp_path: Path) -> None:
         """Test loading a config JSON file that includes tool_discovery."""
         config_data = {
             "clients": {"openai": {"provider": "openai"}},
