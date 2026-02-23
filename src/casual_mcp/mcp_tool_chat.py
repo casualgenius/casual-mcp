@@ -1,5 +1,6 @@
 import json
 import os
+from collections.abc import Sequence
 from typing import Any
 
 from casual_llm import (
@@ -16,6 +17,7 @@ from casual_mcp.convert_tools import tools_from_mcp
 from casual_mcp.logging import get_logger
 from casual_mcp.models.chat_stats import ChatStats
 from casual_mcp.models.toolset_config import ToolSetConfig
+from casual_mcp.synthetic_tool import SyntheticTool
 from casual_mcp.tool_cache import ToolCache
 from casual_mcp.tool_filter import extract_server_and_tool, filter_tools_by_toolset
 from casual_mcp.utils import format_tool_call_result
@@ -51,6 +53,7 @@ class McpToolChat:
         system: str | None = None,
         tool_cache: ToolCache | None = None,
         server_names: set[str] | None = None,
+        synthetic_tools: Sequence[SyntheticTool] = (),
     ):
         self.model = model
         self.mcp_client = mcp_client
@@ -59,6 +62,9 @@ class McpToolChat:
         self.server_names = server_names or set()
         self._tool_cache_version = -1
         self._last_stats: ChatStats | None = None
+        self._synthetic_registry: dict[str, SyntheticTool] = {
+            st.name: st for st in synthetic_tools
+        }
 
     @staticmethod
     def get_session(session_id: str) -> list[ChatMessage] | None:
@@ -157,11 +163,15 @@ class McpToolChat:
             logger.debug("Adding System Message")
             messages.insert(0, SystemMessage(content=self.system))
 
+        # Build combined tool list: MCP tools + synthetic tool definitions
+        synthetic_definitions = [st.definition for st in self._synthetic_registry.values()]
+
         logger.info("Start Chat")
         response_messages: list[ChatMessage] = []
         while True:
             logger.info("Calling the LLM")
-            ai_message = await self.model.chat(messages=messages, tools=tools_from_mcp(tools))
+            all_tools = tools_from_mcp(tools) + synthetic_definitions
+            ai_message = await self.model.chat(messages=messages, tools=all_tools)
 
             # Accumulate token usage stats
             self._last_stats.llm_calls += 1
@@ -183,18 +193,26 @@ class McpToolChat:
             logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
             result_count = 0
             for tool_call in ai_message.tool_calls:
-                # Track tool call stats
                 tool_name = tool_call.function.name
+
+                # Track tool call stats - synthetic tools use "_synthetic" server
                 self._last_stats.tool_calls.by_tool[tool_name] = (
                     self._last_stats.tool_calls.by_tool.get(tool_name, 0) + 1
                 )
-                server_name, _ = extract_server_and_tool(tool_name, self.server_names)
+                if tool_name in self._synthetic_registry:
+                    server_name = "_synthetic"
+                else:
+                    server_name, _ = extract_server_and_tool(tool_name, self.server_names)
                 self._last_stats.tool_calls.by_server[server_name] = (
                     self._last_stats.tool_calls.by_server.get(server_name, 0) + 1
                 )
 
                 try:
-                    result = await self.execute(tool_call, meta=meta)
+                    # Check synthetic registry before forwarding to MCP
+                    if tool_name in self._synthetic_registry:
+                        result = await self._execute_synthetic(tool_call)
+                    else:
+                        result = await self.execute(tool_call, meta=meta)
                 except Exception as e:
                     logger.error(
                         f"Failed to execute tool '{tool_call.function.name}' "
@@ -216,6 +234,34 @@ class McpToolChat:
         logger.debug(f"Final Response: {response_messages[-1].content}")
 
         return response_messages
+
+    async def _execute_synthetic(
+        self,
+        tool_call: AssistantToolCall,
+    ) -> ToolResultMessage:
+        """Execute a synthetic tool call.
+
+        Args:
+            tool_call: The tool call to execute via the synthetic tool registry.
+
+        Returns:
+            ToolResultMessage with the synthetic tool execution result.
+
+        Raises:
+            KeyError: If the tool is not in the synthetic registry.
+        """
+        tool_name = tool_call.function.name
+        synthetic_tool = self._synthetic_registry[tool_name]
+        tool_args = json.loads(tool_call.function.arguments)
+
+        logger.info(f"Executing synthetic tool: {tool_name}")
+        result = await synthetic_tool.execute(tool_args)
+
+        return ToolResultMessage(
+            name=tool_name,
+            tool_call_id=tool_call.id,
+            content=result.content,
+        )
 
     async def execute(
         self,

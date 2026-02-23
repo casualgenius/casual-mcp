@@ -2,6 +2,7 @@ from importlib.metadata import version
 
 from . import models
 from .models.chat_stats import ChatStats, TokenUsageStats, ToolCallStats
+from .synthetic_tool import SyntheticTool, SyntheticToolResult
 
 __version__ = version("casual-mcp")
 from .mcp_tool_chat import McpToolChat
@@ -21,4 +22,6 @@ __all__ = [
     "ChatStats",
     "TokenUsageStats",
     "ToolCallStats",
+    "SyntheticTool",
+    "SyntheticToolResult",
 ]
