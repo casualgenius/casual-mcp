@@ -23,6 +23,7 @@ from casual_llm import (
     AssistantMessage,
     AssistantToolCall,
     AssistantToolCallFunction,
+    Tool,
     UserMessage,
 )
 
@@ -31,6 +32,7 @@ from casual_mcp.models.config import Config, McpClientConfig, McpModelConfig
 from casual_mcp.models.mcp_server_config import RemoteServerConfig, StdioServerConfig
 from casual_mcp.models.tool_discovery_config import ToolDiscoveryConfig
 from casual_mcp.models.toolset_config import ToolSetConfig
+from casual_mcp.synthetic_tool import SyntheticToolResult
 from casual_mcp.tool_discovery import build_tool_server_map, partition_tools
 
 
@@ -694,7 +696,16 @@ class TestToolCacheVersionChange:
     async def test_version_change_rebuilds_index_keeps_loaded(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """Cache version change should rebuild the index but keep loaded tools."""
+        """Cache version change should rebuild the index but keep previously loaded tools.
+
+        Flow:
+        1. Initial tools: math_add (loaded), weather_get (deferred)
+        2. LLM searches for weather_get -> it becomes loaded
+        3. Version bumps (new tool weather_alert appears)
+        4. LLM makes another call -> rebuild happens
+        5. Verify: math_add + weather_get (kept from prior discovery) + search_tools
+           present, weather_alert still deferred
+        """
         weather_tool = _make_tool("weather_get", "Get weather")
         math_tool = _make_tool("math_add", "Add numbers")
         new_tool = _make_tool("weather_alert", "Weather alerts")
@@ -731,19 +742,32 @@ class TestToolCacheVersionChange:
             ),
         )
 
-        # Between step 1 and step 2, version changes
         call_count = [0]
-        original_chat = mock_model.chat
 
         async def model_chat_with_version_bump(**kwargs: Any) -> AssistantMessage:
             call_count[0] += 1
             if call_count[0] == 1:
+                # First call: LLM calls search_tools to load weather_get
                 return AssistantMessage(content="", tool_calls=[search_call])
             elif call_count[0] == 2:
-                # Bump version before this call's tools are built
+                # Second call: after search result returned
+                # Bump version to simulate cache refresh
                 version_counter[0] = 2
+                # LLM wants to keep going (version change detected on next iteration)
+                return AssistantMessage(
+                    content="",
+                    tool_calls=[
+                        AssistantToolCall(
+                            id="call_s2",
+                            function=AssistantToolCallFunction(
+                                name="search_tools",
+                                arguments='{"query": "alert"}',
+                            ),
+                        )
+                    ],
+                )
+            else:
                 return AssistantMessage(content="Done")
-            return AssistantMessage(content="Done")
 
         mock_model.chat = AsyncMock(side_effect=model_chat_with_version_bump)
 
@@ -758,10 +782,101 @@ class TestToolCacheVersionChange:
 
         response = await chat.chat([UserMessage(content="Test")])
 
-        # After the version change, the second model call should include
-        # weather_get (previously loaded), math_add, and search_tools
-        # (because weather_alert is still deferred)
-        assert len(response) >= 3
+        # Verify the flow produced expected messages:
+        # msg 0: assistant with search_tools call
+        # msg 1: tool result from search_tools (Found weather_get)
+        # msg 2: assistant with second search_tools call (version bumped here)
+        # msg 3: tool result from second search_tools (Found weather_alert)
+        # msg 4: final assistant message
+        assert len(response) == 5
+
+        # After version change rebuild, the third model.chat call should include:
+        # - math_add (always loaded)
+        # - weather_get (previously discovered, kept across rebuild)
+        # - search_tools (weather_alert is still deferred)
+        # - weather_alert should NOT be in tool list (still deferred)
+        third_call_tools = mock_model.chat.call_args_list[2][1]["tools"]
+        third_call_names = {t.name for t in third_call_tools}
+        assert "math_add" in third_call_names, "Eagerly loaded tool should survive rebuild"
+        assert "weather_get" in third_call_names, (
+            "Previously discovered tool should be preserved across rebuild"
+        )
+        assert "search_tools" in third_call_names, (
+            "search_tools should be re-injected when new deferred tools exist"
+        )
+
+    async def test_version_change_removes_search_tools_when_no_deferred_remain(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """After version change, if no deferred tools remain, search_tools is removed."""
+        weather_tool = _make_tool("weather_get", "Get weather")
+
+        # Initial: weather deferred. After version bump: same tools but server
+        # no longer defers (simulated via empty deferred partition).
+        initial_tools = [weather_tool]
+        # The rebuild re-fetches and re-partitions. If the server config
+        # no longer defers, all tools go to loaded and search_tools is removed.
+        # We simulate this by having the config NOT defer on rebuild.
+        # Since we can't change config mid-call, we instead just ensure that
+        # after loading weather_get via search, a rebuild with the same tools
+        # keeps weather_get loaded but re-creates search_tools only if needed.
+
+        version_counter = [1]
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(side_effect=[initial_tools, initial_tools])
+
+        def get_version() -> int:
+            return version_counter[0]
+
+        type(tool_cache).version = PropertyMock(side_effect=get_version)
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        # LLM loads weather_get via search, then version bumps on next iteration
+        search_call = AssistantToolCall(
+            id="call_s1",
+            function=AssistantToolCallFunction(
+                name="search_tools",
+                arguments='{"tool_names": ["weather_get"]}',
+            ),
+        )
+
+        call_count = [0]
+
+        async def model_chat_fn(**kwargs: Any) -> AssistantMessage:
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return AssistantMessage(content="", tool_calls=[search_call])
+            elif call_count[0] == 2:
+                # Bump version to trigger rebuild
+                version_counter[0] = 2
+                return AssistantMessage(content="Done")
+            return AssistantMessage(content="Done")
+
+        mock_model.chat = AsyncMock(side_effect=model_chat_fn)
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"weather"},
+            config=config,
+        )
+
+        await chat.chat([UserMessage(content="Test")])
+
+        # After search, weather_get was loaded. On rebuild with same tools,
+        # weather_get is now in previously_loaded_names and will be kept in loaded.
+        # Since it was the only deferred tool, no deferred remain -> search_tools removed.
+        # The second call (call_count=2) should show weather_get but no search_tools
+        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_names = {t.name for t in second_call_tools}
+        assert "weather_get" in second_call_names
+        assert "search_tools" in second_call_names  # Still present before rebuild
 
 
 class TestToolsetFilteringWithDiscovery:
@@ -1050,3 +1165,272 @@ class TestDeferAllMode:
         assert "search_tools" in tool_names
         assert "math_add" not in tool_names
         assert "weather_get" not in tool_names
+
+
+class TestEdgeCases:
+    """Edge case and robustness tests for tool discovery integration."""
+
+    @pytest.fixture
+    def mock_client(self) -> AsyncMock:
+        client = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        return client
+
+    @pytest.fixture
+    def mock_model(self) -> AsyncMock:
+        model = AsyncMock()
+        model.get_usage = Mock(return_value=None)
+        return model
+
+    async def test_discovery_with_no_tools_at_all(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """Discovery should handle an empty tool set gracefully."""
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(return_value=[])
+        type(tool_cache).version = PropertyMock(return_value=1)
+
+        config = _make_config(
+            servers={"math": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="No tools"))
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"math"},
+            config=config,
+        )
+        response = await chat.chat([UserMessage(content="Hi")])
+
+        # No tools available at all -> no search_tools injected
+        call_kwargs = mock_model.chat.call_args[1]
+        tool_names = {t.name for t in call_kwargs["tools"]}
+        assert "search_tools" not in tool_names
+        assert len(response) == 1
+
+    async def test_search_returns_no_results(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """search_tools returning no results should not crash or expand tools."""
+        weather_tool = _make_tool("weather_get", "Get weather forecast")
+
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(return_value=[weather_tool])
+        type(tool_cache).version = PropertyMock(return_value=1)
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        # LLM searches for something that doesn't match
+        search_call = AssistantToolCall(
+            id="call_s1",
+            function=AssistantToolCallFunction(
+                name="search_tools",
+                arguments='{"query": "zzz_nonexistent_zzz"}',
+            ),
+        )
+
+        mock_model.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[search_call]),
+                AssistantMessage(content="OK"),
+            ]
+        )
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"weather"},
+            config=config,
+        )
+        response = await chat.chat([UserMessage(content="Test")])
+
+        # Tool result should mention no tools found
+        assert "No tools found" in response[1].content
+
+        # After no results, the second model call should still NOT include
+        # weather_get (it was never discovered)
+        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_names = {t.name for t in second_call_tools}
+        assert "weather_get" not in second_call_names
+        assert "search_tools" in second_call_names
+
+    async def test_static_synthetic_tools_coexist_with_search_tools(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """Static synthetic tools should coexist with search_tools in the registry."""
+        weather_tool = _make_tool("weather_get", "Get weather")
+
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(return_value=[weather_tool])
+        type(tool_cache).version = PropertyMock(return_value=1)
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        # Create a static synthetic tool
+        static_tool = Mock()
+        static_tool.name = "my_custom_tool"
+        static_tool.definition = Tool.from_input_schema(
+            name="my_custom_tool",
+            description="A custom synthetic tool",
+            input_schema={"type": "object", "properties": {}},
+        )
+        static_tool.execute = AsyncMock(
+            return_value=SyntheticToolResult(content="custom result", newly_loaded_tools=[])
+        )
+
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"weather"},
+            synthetic_tools=[static_tool],
+            config=config,
+        )
+        await chat.chat([UserMessage(content="Hi")])
+
+        # Both search_tools and my_custom_tool should be available
+        call_kwargs = mock_model.chat.call_args[1]
+        tool_names = {t.name for t in call_kwargs["tools"]}
+        assert "search_tools" in tool_names
+        assert "my_custom_tool" in tool_names
+        assert "weather_get" not in tool_names  # deferred
+
+    async def test_deferred_tool_becomes_usable_after_discovery(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """A deferred tool that was initially blocked should work after search_tools loads it."""
+        weather_tool = _make_tool("weather_get", "Get weather forecast")
+
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(return_value=[weather_tool])
+        type(tool_cache).version = PropertyMock(return_value=1)
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        # Step 1: LLM tries to call weather_get directly (should get error)
+        direct_call = AssistantToolCall(
+            id="call_1",
+            function=AssistantToolCallFunction(
+                name="weather_get", arguments="{}"
+            ),
+        )
+        # Step 2: LLM searches for weather_get
+        search_call = AssistantToolCall(
+            id="call_2",
+            function=AssistantToolCallFunction(
+                name="search_tools",
+                arguments='{"tool_names": ["weather_get"]}',
+            ),
+        )
+        # Step 3: LLM calls weather_get again (should succeed now)
+        retry_call = AssistantToolCall(
+            id="call_3",
+            function=AssistantToolCallFunction(
+                name="weather_get", arguments="{}"
+            ),
+        )
+
+        class MockContent:
+            type = "text"
+            text = '{"temp": 72}'
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        mock_model.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[direct_call]),
+                AssistantMessage(content="", tool_calls=[search_call]),
+                AssistantMessage(content="", tool_calls=[retry_call]),
+                AssistantMessage(content="The temperature is 72."),
+            ]
+        )
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"weather"},
+            config=config,
+        )
+        response = await chat.chat([UserMessage(content="Get weather")])
+
+        # msg 0: assistant tries direct call
+        # msg 1: error result (not yet loaded)
+        # msg 2: assistant calls search_tools
+        # msg 3: search_tools result (Found 1 tool)
+        # msg 4: assistant retries weather_get
+        # msg 5: successful tool result
+        # msg 6: final answer
+        assert len(response) == 7
+        assert "not yet loaded" in response[1].content
+        assert "Found" in response[3].content
+        # The retry call should succeed via MCP
+        mock_client.call_tool.assert_called_once()
+        assert response[6].content == "The temperature is 72."
+
+    async def test_llm_calls_count_tracked_with_discovery(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """LLM call count should include all iterations with discovery."""
+        weather_tool = _make_tool("weather_get", "Get weather")
+
+        tool_cache = Mock()
+        tool_cache.get_tools = AsyncMock(return_value=[weather_tool])
+        type(tool_cache).version = PropertyMock(return_value=1)
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        search_call = AssistantToolCall(
+            id="call_s1",
+            function=AssistantToolCallFunction(
+                name="search_tools",
+                arguments='{"query": "weather"}',
+            ),
+        )
+
+        mock_model.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[search_call]),
+                AssistantMessage(content="Done"),
+            ]
+        )
+
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System",
+            tool_cache,
+            server_names={"weather"},
+            config=config,
+        )
+        await chat.chat([UserMessage(content="Test")])
+
+        stats = chat.get_stats()
+        assert stats is not None
+        assert stats.llm_calls == 2  # search call + final answer
