@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import mcp
+import pydantic
 import pytest
 from casual_llm import (
     AssistantMessage,
@@ -91,6 +92,16 @@ class TestDiscoveryStats:
         stats = DiscoveryStats(tools_discovered=10, search_calls=2)
         data = stats.model_dump()
         assert data == {"tools_discovered": 10, "search_calls": 2}
+
+    def test_rejects_negative_search_calls(self) -> None:
+        """DiscoveryStats should reject negative search_calls."""
+        with pytest.raises(pydantic.ValidationError):
+            DiscoveryStats(search_calls=-1)
+
+    def test_rejects_negative_tools_discovered(self) -> None:
+        """DiscoveryStats should reject negative tools_discovered."""
+        with pytest.raises(pydantic.ValidationError):
+            DiscoveryStats(tools_discovered=-1)
 
 
 class TestChatStatsWithDiscovery:
@@ -187,6 +198,33 @@ class TestGetChatPassesConfig:
 
         assert chat._config is config
         assert chat._tool_discovery_config is None
+        assert not chat._is_discovery_enabled()
+
+    async def test_discovery_disabled_when_config_none_but_discovery_config_set(
+        self,
+    ) -> None:
+        """_is_discovery_enabled should be False when config is None even with discovery_config."""
+        mock_client = AsyncMock()
+        mock_model = AsyncMock()
+        mock_model.get_usage = Mock(return_value=None)
+        mock_tool_cache = Mock()
+        mock_tool_cache.get_tools = AsyncMock(return_value=[])
+        mock_tool_cache.version = 1
+
+        # Explicitly pass tool_discovery_config without config
+        chat = McpToolChat(
+            mock_client,
+            mock_model,
+            "System prompt",
+            tool_cache=mock_tool_cache,
+            tool_discovery_config=ToolDiscoveryConfig(enabled=True),
+        )
+
+        # Even though tool_discovery_config.enabled is True,
+        # _is_discovery_enabled() requires config to be non-None
+        assert chat._tool_discovery_config is not None
+        assert chat._tool_discovery_config.enabled is True
+        assert chat._config is None
         assert not chat._is_discovery_enabled()
 
 
@@ -536,6 +574,96 @@ class TestCLIToolsCommand:
             # Table should have 3 columns (Name, Description, Status)
             assert len(table.columns) == 3
             assert table.columns[2].header == "Status"
+
+    def test_tools_table_correct_status_labels(self) -> None:
+        """CLI tools command should mark deferred tools and loaded tools correctly."""
+        from casual_mcp.cli import tools as tools_command
+
+        config = _make_config(
+            servers={
+                "math": {"defer_loading": False},
+                "weather": {"defer_loading": True},
+            },
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        tool_list = [
+            _make_tool("math_add", "Add two numbers"),
+            _make_tool("weather_get", "Get weather"),
+        ]
+
+        with (
+            patch("casual_mcp.cli.load_config", return_value=config),
+            patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
+            patch(
+                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
+            ),
+            patch("casual_mcp.cli.console") as mock_console,
+        ):
+            tools_command()
+
+            table = mock_console.print.call_args[0][0]
+            # Build name->status mapping from the table
+            names = list(table.columns[0].cells)
+            statuses = list(table.columns[2].cells)
+            status_map = dict(zip(names, statuses))
+
+            # math_add should be loaded (math server defer_loading=False)
+            assert status_map["math_add"] == "loaded"
+            # weather_get should be deferred (weather server defer_loading=True)
+            assert "[yellow]deferred[/yellow]" in status_map["weather_get"]
+
+    def test_tools_table_all_tools_deferred(self) -> None:
+        """CLI tools command shows all tools as deferred when all servers defer."""
+        from casual_mcp.cli import tools as tools_command
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        tool_list = [
+            _make_tool("weather_get", "Get weather"),
+            _make_tool("weather_forecast", "Get forecast"),
+        ]
+
+        with (
+            patch("casual_mcp.cli.load_config", return_value=config),
+            patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
+            patch(
+                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
+            ),
+            patch("casual_mcp.cli.console") as mock_console,
+        ):
+            tools_command()
+
+            table = mock_console.print.call_args[0][0]
+            statuses = list(table.columns[2].cells)
+            # All tools should be deferred
+            for status in statuses:
+                assert "deferred" in status
+
+    def test_tools_table_empty_tool_list_with_discovery(self) -> None:
+        """CLI tools command handles empty tool list with discovery enabled."""
+        from casual_mcp.cli import tools as tools_command
+
+        config = _make_config(
+            servers={"weather": {"defer_loading": True}},
+            discovery=ToolDiscoveryConfig(enabled=True),
+        )
+
+        with (
+            patch("casual_mcp.cli.load_config", return_value=config),
+            patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=[]),
+            patch("casual_mcp.cli.console") as mock_console,
+        ):
+            tools_command()
+
+            table = mock_console.print.call_args[0][0]
+            # Table should have 3 columns (Status is present) but no rows
+            assert len(table.columns) == 3
+            assert len(list(table.columns[0].cells)) == 0
 
     def test_tools_table_without_discovery(self) -> None:
         """CLI tools command should not show Status column without discovery."""
