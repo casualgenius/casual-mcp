@@ -181,4 +181,5 @@ async def get_chat(model: str, system: str | None = None) -> McpToolChat:
         system,
         tool_cache=tool_cache,
         server_names=set(config.servers.keys()),
+        config=config,
     )

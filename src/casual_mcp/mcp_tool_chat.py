@@ -16,7 +16,7 @@ from fastmcp import Client
 
 from casual_mcp.convert_tools import tools_from_mcp
 from casual_mcp.logging import get_logger
-from casual_mcp.models.chat_stats import ChatStats
+from casual_mcp.models.chat_stats import ChatStats, DiscoveryStats
 from casual_mcp.models.config import Config
 from casual_mcp.models.tool_discovery_config import ToolDiscoveryConfig
 from casual_mcp.models.toolset_config import ToolSetConfig
@@ -196,6 +196,9 @@ class McpToolChat:
             assert self._config is not None
             assert self._tool_discovery_config is not None
 
+            # Initialize discovery stats tracking
+            self._last_stats.discovery = DiscoveryStats()
+
             loaded_tools, deferred_by_server = partition_tools(
                 tools, self._config, self.server_names
             )
@@ -323,6 +326,15 @@ class McpToolChat:
                         result, newly_loaded = await self._execute_synthetic_with_expansion(
                             tool_call, registry=call_synthetic_registry
                         )
+                        # Track discovery stats for search_tools calls
+                        if (
+                            tool_name == "search_tools"
+                            and self._last_stats.discovery is not None
+                        ):
+                            self._last_stats.discovery.search_calls += 1
+                            self._last_stats.discovery.tools_discovered += len(
+                                newly_loaded
+                            )
                         # Handle newly loaded tools from search_tools execution
                         if newly_loaded:
                             loaded_tools.extend(newly_loaded)

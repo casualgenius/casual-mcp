@@ -29,9 +29,31 @@ class ToolCallStats(BaseModel):
         return sum(self.by_tool.values())
 
 
+class DiscoveryStats(BaseModel):
+    """Statistics about tool discovery during a chat session.
+
+    Only populated when tool discovery is enabled.
+    """
+
+    tools_discovered: int = Field(
+        default=0,
+        ge=0,
+        description="Number of tools discovered (loaded) via search_tools",
+    )
+    search_calls: int = Field(
+        default=0,
+        ge=0,
+        description="Number of search_tools invocations",
+    )
+
+
 class ChatStats(BaseModel):
     """Combined statistics from a chat session."""
 
     tokens: TokenUsageStats = Field(default_factory=TokenUsageStats)
     tool_calls: ToolCallStats = Field(default_factory=ToolCallStats)
     llm_calls: int = Field(default=0, ge=0, description="Number of LLM calls made")
+    discovery: DiscoveryStats | None = Field(
+        default=None,
+        description="Tool discovery statistics, present only when discovery is enabled",
+    )
