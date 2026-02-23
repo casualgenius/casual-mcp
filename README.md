@@ -11,6 +11,7 @@
 - OpenAI, Ollama, and Anthropic provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
 - Recursive tool-calling chat loop
 - Toolsets for selective tool filtering per request
+- **Tool discovery** -- defer tool loading and let the LLM search for tools on demand via BM25
 - Usage statistics tracking (tokens, tool calls, LLM calls)
 - System prompt templating with Jinja2
 - CLI and API interfaces
@@ -87,6 +88,40 @@ Configure clients, models, MCP servers, and toolsets in `casual_mcp_config.json`
 
 See [Configuration Guide](docs/configuration.md) for full details on models, servers, toolsets, and templates.
 
+## Tool Discovery
+
+When connecting many MCP servers, the combined tool definitions can consume significant context and degrade tool selection accuracy. Tool discovery solves this by deferring tool loading -- instead of sending all tools to the LLM on every call, deferred tools are made available through a `search_tools` meta-tool that the LLM can invoke on demand.
+
+Add `tool_discovery` to your config and mark servers with `defer_loading`:
+
+```json
+{
+  "servers": {
+    "core-tools": { "command": "python", "args": ["servers/core.py"] },
+    "research-tools": {
+      "command": "python",
+      "args": ["servers/research.py"],
+      "defer_loading": true
+    }
+  },
+  "tool_discovery": {
+    "enabled": true,
+    "defer_all": false,
+    "max_search_results": 5
+  }
+}
+```
+
+How it works:
+
+1. Tools from servers with `defer_loading: true` are held back from the LLM
+2. A `search_tools` tool is injected with a compressed manifest of available servers and tools
+3. The LLM calls `search_tools` with a keyword query, server name, or exact tool names
+4. Matched tools are loaded into the active set for the remainder of the conversation
+5. Set `defer_all: true` to defer all servers without marking each individually
+
+The CLI `tools` command shows which tools are loaded vs deferred when discovery is enabled. Stats include `search_calls` and `tools_discovered` counts.
+
 ## CLI
 
 ```bash
@@ -124,7 +159,7 @@ mcp_client = load_mcp_client(config)
 model_factory = ModelFactory(config)
 llm_model = model_factory.get_model("gpt-4.1")
 
-chat = McpToolChat(mcp_client, llm_model)
+chat = McpToolChat(mcp_client, llm_model, config=config)
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it?")
