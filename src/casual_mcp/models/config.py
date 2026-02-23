@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, SecretStr
 
 from casual_mcp.models.mcp_server_config import McpServerConfig
+from casual_mcp.models.tool_discovery_config import ToolDiscoveryConfig
 from casual_mcp.models.toolset_config import ToolSetConfig
 
 
@@ -35,3 +36,4 @@ class Config(BaseModel):
     models: dict[str, McpModelConfig]
     servers: dict[str, McpServerConfig]
     tool_sets: dict[str, ToolSetConfig] = Field(default_factory=dict)
+    tool_discovery: ToolDiscoveryConfig | None = None

@@ -18,6 +18,7 @@ from .mcp_server_config import (
     RemoteServerConfig,
     StdioServerConfig,
 )
+from .tool_discovery_config import ToolDiscoveryConfig
 from .toolset_config import (
     ExcludeSpec,
     ToolSetConfig,
@@ -39,6 +40,7 @@ __all__ = [
     "McpServerConfig",
     "StdioServerConfig",
     "RemoteServerConfig",
+    "ToolDiscoveryConfig",
     "ExcludeSpec",
     "ToolSetConfig",
     "ToolSpec",
