@@ -257,14 +257,14 @@ class TestGenerateManifest:
     def test_single_server_single_tool(self) -> None:
         tools = {"solo": [_make_tool("solo_tool", "The only tool.")]}
         manifest = generate_manifest(tools)
-        assert "solo (1 tools): solo_tool" in manifest
+        assert "solo (1 tool): solo_tool" in manifest
         assert "The only tool." in manifest
 
     def test_server_with_no_descriptions(self) -> None:
         """Server whose tools have no descriptions should not produce a summary line."""
         tools = {"bare": [_make_tool("bare_tool", "")]}
         manifest = generate_manifest(tools)
-        assert "bare (1 tools): bare_tool" in manifest
+        assert "bare (1 tool): bare_tool" in manifest
         # No indented summary line
         lines = manifest.strip().split("\n")
         assert len(lines) == 1
@@ -332,8 +332,17 @@ class TestFormatToolDetails:
         assert "a: number (required)" in result
         assert "b: number (required)" in result
 
-    def test_tool_with_no_description(self) -> None:
+    def test_tool_with_empty_description(self) -> None:
         tool = _make_tool("bare", "")
+        result = _format_tool_details("srv", tool)
+        assert "(no description)" in result
+
+    def test_tool_with_none_description(self) -> None:
+        tool = mcp.Tool(
+            name="bare",
+            description=None,
+            inputSchema={"type": "object", "properties": {}},
+        )
         result = _format_tool_details("srv", tool)
         assert "(no description)" in result
 
@@ -797,3 +806,39 @@ class TestEdgeCases:
         )
         assert len(result.newly_loaded_tools) == 1
         assert result.newly_loaded_tools[0].name == "math_add"
+
+    async def test_duplicate_tool_names_handled(self, search_tool: SearchToolsTool) -> None:
+        """Duplicate entries in tool_names should not cause errors."""
+        result = await search_tool.execute(
+            {"tool_names": ["math_add", "math_add"]}
+        )
+        # First occurrence is newly loaded, second is already loaded
+        assert len(result.newly_loaded_tools) == 1
+        assert result.newly_loaded_tools[0].name == "math_add"
+        assert "Already loaded: math_add" in result.content
+
+    async def test_empty_server_name_treated_as_invalid(
+        self, search_tool: SearchToolsTool
+    ) -> None:
+        """Empty string server_name should produce an unknown server error."""
+        result = await search_tool.execute({"server_name": ""})
+        assert "Error: Unknown server" in result.content
+        assert result.newly_loaded_tools == []
+
+    def test_manifest_singular_tool_grammar(self) -> None:
+        """Manifest should say '1 tool' not '1 tools'."""
+        tools = {"solo": [_make_tool("solo_tool", "The only tool.")]}
+        manifest = generate_manifest(tools)
+        assert "1 tool)" in manifest
+        assert "1 tools)" not in manifest
+
+    def test_manifest_plural_tools_grammar(self) -> None:
+        """Manifest should say 'N tools' for N > 1."""
+        tools = {
+            "multi": [
+                _make_tool("tool_a", "First."),
+                _make_tool("tool_b", "Second."),
+            ]
+        }
+        manifest = generate_manifest(tools)
+        assert "2 tools)" in manifest

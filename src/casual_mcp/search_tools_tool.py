@@ -98,7 +98,8 @@ def generate_manifest(
             names_str = ", ".join(tool_names)
 
         summary = _summarise_server(tools)
-        lines.append(f"- {server_name} ({count} tools): {names_str}")
+        tool_word = "tool" if count == 1 else "tools"
+        lines.append(f"- {server_name} ({count} {tool_word}): {names_str}")
         if summary:
             lines.append(f"  {summary}")
 
