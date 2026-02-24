@@ -588,7 +588,15 @@ class McpToolChat:
             ToolResultMessage with the tool execution result
         """
         tool_name = tool_call.function.name
-        tool_args = json.loads(tool_call.function.arguments)
+        try:
+            tool_args = json.loads(tool_call.function.arguments)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Malformed tool arguments for '{tool_name}': {e}")
+            return ToolResultMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=f"Error: Malformed arguments for tool '{tool_name}'.",
+            )
         try:
             async with self.mcp_client:
                 result = await self.mcp_client.call_tool(tool_name, tool_args, meta=meta)

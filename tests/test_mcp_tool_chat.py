@@ -697,6 +697,107 @@ class TestMcpToolChatFromConfig:
         assert system_msgs[0].content == "explicit system"
 
 
+class TestChatLoopGuard:
+    """Tests for the max_iterations loop guard."""
+
+    async def test_max_iterations_raises_runtime_error(
+        self, mock_client, mock_model, mock_tool_cache
+    ):
+        """Chat should raise RuntimeError when the LLM never stops calling tools."""
+        tool_call = AssistantToolCall(
+            id="call_1", function=AssistantToolCallFunction(name="tool1", arguments="{}")
+        )
+
+        # Model always returns a tool call, never a final answer
+        mock_model.chat = AsyncMock(
+            return_value=AssistantMessage(content="", tool_calls=[tool_call])
+        )
+
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+
+        with patch("casual_mcp.mcp_tool_chat.DEFAULT_MAX_ITERATIONS", 3):
+            with pytest.raises(RuntimeError, match="exceeded maximum 3 iterations"):
+                await chat.chat([UserMessage(content="Test")], model=mock_model)
+
+        # Model should have been called exactly 3 times (the iteration limit)
+        assert mock_model.chat.call_count == 3
+
+    async def test_max_iterations_env_override(self, mock_client, mock_model, mock_tool_cache):
+        """Chat should respect a custom iteration limit."""
+        tool_call = AssistantToolCall(
+            id="call_1", function=AssistantToolCallFunction(name="tool1", arguments="{}")
+        )
+
+        mock_model.chat = AsyncMock(
+            return_value=AssistantMessage(content="", tool_calls=[tool_call])
+        )
+
+        class MockContent:
+            type = "text"
+            text = "result"
+
+        mock_client.call_tool = AsyncMock(
+            return_value=Mock(content=[MockContent()], structuredContent=None)
+        )
+
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+
+        with patch("casual_mcp.mcp_tool_chat.DEFAULT_MAX_ITERATIONS", 5):
+            with pytest.raises(RuntimeError, match="exceeded maximum 5 iterations"):
+                await chat.chat([UserMessage(content="Test")], model=mock_model)
+
+        assert mock_model.chat.call_count == 5
+
+
+class TestMalformedToolArguments:
+    """Tests for handling malformed JSON in tool call arguments."""
+
+    async def test_malformed_json_in_tool_arguments(self, mock_client, mock_model, mock_tool_cache):
+        """Chat should handle malformed JSON arguments gracefully."""
+        tool_call = AssistantToolCall(
+            id="call_1",
+            function=AssistantToolCallFunction(name="tool1", arguments="not valid json{{{"),
+        )
+
+        mock_model.chat = AsyncMock(
+            side_effect=[
+                AssistantMessage(content="", tool_calls=[tool_call]),
+                AssistantMessage(content="I see the error"),
+            ]
+        )
+
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
+
+        # Should have recovered: error result fed back, then LLM gave final answer
+        assert len(response) == 3
+        error_result = response[1]
+        assert error_result.name == "tool1"
+        assert "Error" in error_result.content
+        assert response[2].content == "I see the error"
+
+    async def test_execute_malformed_json_returns_error(self, mock_client, mock_tool_cache):
+        """execute() should return an error for malformed JSON arguments."""
+        tool_call = AssistantToolCall(
+            id="call_1",
+            function=AssistantToolCallFunction(name="tool1", arguments="{bad json}"),
+        )
+
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+        result = await chat.execute(tool_call)
+
+        assert "Malformed arguments" in result.content
+        assert result.tool_call_id == "call_1"
+
+
 class TestConcurrentRequests:
     """Test that concurrent chat() calls don't corrupt each other's stats."""
 
