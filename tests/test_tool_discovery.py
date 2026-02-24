@@ -23,6 +23,7 @@ from casual_llm import (
     AssistantMessage,
     AssistantToolCall,
     AssistantToolCallFunction,
+    Model,
     Tool,
     UserMessage,
 )
@@ -189,7 +190,7 @@ class TestMcpToolChatDiscoveryConfig:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -203,14 +204,14 @@ class TestMcpToolChatDiscoveryConfig:
     def test_accepts_config_param(
         self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
     ) -> None:
-        """McpToolChat accepts config parameter."""
+        """McpToolChat accepts config set on instance."""
         config = _make_config(
             servers={"math": {"defer_loading": True}},
             discovery=ToolDiscoveryConfig(enabled=True),
         )
-        chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, config=config
-        )
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
         assert chat._config is config
         assert chat._tool_discovery_config is not None
         assert chat._tool_discovery_config.enabled is True
@@ -223,14 +224,9 @@ class TestMcpToolChatDiscoveryConfig:
             discovery=ToolDiscoveryConfig(enabled=False),
         )
         override = ToolDiscoveryConfig(enabled=True, max_search_results=10)
-        chat = McpToolChat(
-            mock_client,
-            mock_model,
-            "System",
-            mock_tool_cache,
-            config=config,
-            tool_discovery_config=override,
-        )
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
+        chat._config = config
+        chat._tool_discovery_config = override
         assert chat._tool_discovery_config is override
         assert chat._tool_discovery_config.enabled is True
 
@@ -238,14 +234,14 @@ class TestMcpToolChatDiscoveryConfig:
         self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
     ) -> None:
         """Without config, discovery is disabled."""
-        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
         assert not chat._is_discovery_enabled()
 
     def test_backward_compatible_without_new_params(
         self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
     ) -> None:
         """McpToolChat still works without config or tool_discovery_config."""
-        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
         assert chat._config is None
         assert chat._tool_discovery_config is None
 
@@ -267,7 +263,7 @@ class TestChatLoopWithDiscovery:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -298,14 +294,15 @@ class TestChatLoopWithDiscovery:
             discovery=discovery or ToolDiscoveryConfig(enabled=True),
         )
         tool_cache = self._make_tool_cache(all_tools, version=cache_version)
-        return McpToolChat(
+        chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names=server_names,
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        return chat
 
     async def test_search_tools_injected_when_deferred_exist(
         self, mock_client: AsyncMock, mock_model: AsyncMock
@@ -328,7 +325,7 @@ class TestChatLoopWithDiscovery:
                 "weather": {"defer_loading": True},
             },
         )
-        await chat.chat([UserMessage(content="Hi")])
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         # Check that the model was called with search_tools in the tool list
         call_kwargs = mock_model.chat.call_args[1]
@@ -353,7 +350,7 @@ class TestChatLoopWithDiscovery:
             {"math"},
             servers={"math": {"defer_loading": False}},
         )
-        await chat.chat([UserMessage(content="Hi")])
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
@@ -376,7 +373,7 @@ class TestChatLoopWithDiscovery:
             servers={"weather": {"defer_loading": True}},
             discovery=ToolDiscoveryConfig(enabled=False),
         )
-        await chat.chat([UserMessage(content="Hi")])
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
@@ -397,7 +394,7 @@ class TestDiscoverAndUseFlow:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -463,14 +460,14 @@ class TestDiscoverAndUseFlow:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math", "weather"},
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
-        response = await chat.chat([UserMessage(content="What's the weather?")])
+        response = await chat.chat([UserMessage(content="What's the weather?")], model=mock_model)
 
         # Verify the flow:
         # msg 0: assistant with search_tools call
@@ -540,14 +537,14 @@ class TestDiscoverAndUseFlow:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
-        response = await chat.chat([UserMessage(content="Test")])
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # After first search, forecast should be loaded
         second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
@@ -578,7 +575,7 @@ class TestDeferredToolWithoutSearch:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -616,14 +613,14 @@ class TestDeferredToolWithoutSearch:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
-        response = await chat.chat([UserMessage(content="Get weather")])
+        response = await chat.chat([UserMessage(content="Get weather")], model=mock_model)
 
         # The tool result should be an error
         tool_result = response[1]
@@ -666,13 +663,13 @@ class TestDeferredToolWithoutSearch:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         mock_client.call_tool.assert_not_called()
 
@@ -689,7 +686,7 @@ class TestToolCacheVersionChange:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -773,14 +770,14 @@ class TestToolCacheVersionChange:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math", "weather"},
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
-        response = await chat.chat([UserMessage(content="Test")])
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # Verify the flow produced expected messages:
         # msg 0: assistant with search_tools call
@@ -860,14 +857,14 @@ class TestToolCacheVersionChange:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # After search, weather_get was loaded. On rebuild with same tools,
         # weather_get is now in previously_loaded_names and will be kept in loaded.
@@ -891,7 +888,7 @@ class TestToolsetFilteringWithDiscovery:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -922,13 +919,13 @@ class TestToolsetFilteringWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math", "weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")], tool_set=tool_set)
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], tool_set=tool_set, model=mock_model)
 
         # Only math_add should be in tools (weather excluded by toolset)
         call_kwargs = mock_model.chat.call_args[1]
@@ -952,7 +949,7 @@ class TestStatsTrackingWithDiscovery:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -988,13 +985,13 @@ class TestStatsTrackingWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -1051,13 +1048,13 @@ class TestStatsTrackingWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -1097,13 +1094,13 @@ class TestStatsTrackingWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -1124,7 +1121,7 @@ class TestDeferAllMode:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -1151,13 +1148,13 @@ class TestDeferAllMode:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math", "weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         # Only search_tools should be in the tool list
         call_kwargs = mock_model.chat.call_args[1]
@@ -1179,7 +1176,7 @@ class TestEdgeCases:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -1200,13 +1197,13 @@ class TestEdgeCases:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math"},
-            config=config,
         )
-        response = await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        response = await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         # No tools available at all -> no search_tools injected
         call_kwargs = mock_model.chat.call_args[1]
@@ -1247,13 +1244,13 @@ class TestEdgeCases:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        response = await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # Tool result should mention no tools found
         assert "No tools found" in response[1].content
@@ -1296,14 +1293,14 @@ class TestEdgeCases:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
             synthetic_tools=[static_tool],
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         # Both search_tools and my_custom_tool should be available
         call_kwargs = mock_model.chat.call_args[1]
@@ -1369,13 +1366,13 @@ class TestEdgeCases:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        response = await chat.chat([UserMessage(content="Get weather")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        response = await chat.chat([UserMessage(content="Get weather")], model=mock_model)
 
         # msg 0: assistant tries direct call
         # msg 1: error result (not yet loaded)
@@ -1423,13 +1420,13 @@ class TestEdgeCases:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None

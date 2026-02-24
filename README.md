@@ -151,23 +151,19 @@ See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response fo
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, load_config
 
 config = load_config("casual_mcp_config.json")
-mcp_client = load_mcp_client(config)
+chat = McpToolChat.from_config(config)
 
-model_factory = ModelFactory(config)
-llm_model = model_factory.get_model("gpt-4.1")
-
-chat = McpToolChat(mcp_client, llm_model, config=config)
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it?")
 ]
-response = await chat.chat(messages)
+response = await chat.chat(messages, model="gpt-4.1")
 ```
 
-See [Programmatic Usage Guide](docs/programmatic-usage.md) for `McpToolChat`, usage statistics, toolsets, and common patterns.
+For full control you can still construct `McpToolChat` manually — see the [Programmatic Usage Guide](docs/programmatic-usage.md) for details on `from_config()`, model selection at call time, usage statistics, toolsets, and common patterns.
 
 ## Architecture
 

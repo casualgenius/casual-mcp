@@ -9,6 +9,7 @@ from casual_llm import (
     AssistantMessage,
     AssistantToolCall,
     AssistantToolCallFunction,
+    Model,
     Tool,
     ToolParameter,
     UserMessage,
@@ -148,7 +149,7 @@ class TestMcpToolChatSyntheticTools:
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
         """Create mock LLM model."""
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -160,21 +161,21 @@ class TestMcpToolChatSyntheticTools:
         return cache
 
     def test_init_without_synthetic_tools(
-        self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
+        self, mock_client: AsyncMock, mock_tool_cache: Mock
     ) -> None:
         """Test that McpToolChat works without synthetic tools (default)."""
-        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
         assert chat._synthetic_registry == {}
 
     def test_init_with_synthetic_tools(
-        self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
+        self, mock_client: AsyncMock, mock_tool_cache: Mock
     ) -> None:
         """Test that McpToolChat builds synthetic registry from provided tools."""
         tool1 = FakeSyntheticTool("tool_a")
         tool2 = FakeSyntheticTool("tool_b")
 
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[tool1, tool2]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[tool1, tool2]
         )
 
         assert len(chat._synthetic_registry) == 2
@@ -187,10 +188,10 @@ class TestMcpToolChatSyntheticTools:
         """Test that chat behavior is unchanged when no synthetic tools are provided."""
         mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
 
-        chat = McpToolChat(mock_client, mock_model, "System", mock_tool_cache)
+        chat = McpToolChat(mock_client, "System", mock_tool_cache)
         messages = [UserMessage(content="Hello")]
 
-        response = await chat.chat(messages)
+        response = await chat.chat(messages, model=mock_model)
 
         assert len(response) == 1
         assert response[0].content == "Response"
@@ -206,9 +207,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        await chat.chat([UserMessage(content="Hello")])
+        await chat.chat([UserMessage(content="Hello")], model=mock_model)
 
         # Check the tools passed to model.chat
         call_kwargs = mock_model.chat.call_args[1]
@@ -231,9 +232,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        await chat.chat([UserMessage(content="Hello")])
+        await chat.chat([UserMessage(content="Hello")], model=mock_model)
 
         # Should have both MCP and synthetic tools
         call_kwargs = mock_model.chat.call_args[1]
@@ -263,9 +264,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools", content="Found: calculator tool")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        response = await chat.chat([UserMessage(content="Find calculator")])
+        response = await chat.chat([UserMessage(content="Find calculator")], model=mock_model)
 
         # MCP client should NOT have been called
         mock_client.call_tool.assert_not_called()
@@ -298,9 +299,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools", content="Result content")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        response = await chat.chat([UserMessage(content="Test")])
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         tool_result = response[1]
         assert tool_result.role == "tool"
@@ -335,9 +336,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        await chat.chat([UserMessage(content="Calculate")])
+        await chat.chat([UserMessage(content="Calculate")], model=mock_model)
 
         # MCP client SHOULD have been called for the non-synthetic tool
         mock_client.call_tool.assert_called_once()
@@ -375,9 +376,9 @@ class TestMcpToolChatSyntheticTools:
 
         synthetic = FakeSyntheticTool("search_tools", content="Found calculator")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        response = await chat.chat([UserMessage(content="Test")])
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # Should have: assistant (tool calls), synthetic result, mcp result, assistant (final)
         assert len(response) == 4
@@ -406,9 +407,9 @@ class TestMcpToolChatSyntheticTools:
 
         error_tool = ErrorSyntheticTool()
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[error_tool]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[error_tool]
         )
-        response = await chat.chat([UserMessage(content="Test")])
+        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # Error should be surfaced to the LLM
         assert len(response) == 3
@@ -432,7 +433,7 @@ class TestSyntheticToolStats:
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
         """Create mock LLM model."""
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -463,9 +464,9 @@ class TestSyntheticToolStats:
 
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -499,9 +500,9 @@ class TestSyntheticToolStats:
 
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[synthetic]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[synthetic]
         )
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -545,13 +546,12 @@ class TestSyntheticToolStats:
         synthetic = FakeSyntheticTool("search_tools")
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             mock_tool_cache,
             server_names={"math"},
             synthetic_tools=[synthetic],
         )
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -585,9 +585,9 @@ class TestSyntheticToolStats:
 
         # No synthetic tools
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, server_names={"math"}
+            mock_client, "System", mock_tool_cache, server_names={"math"}
         )
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -612,9 +612,9 @@ class TestSyntheticToolStats:
 
         error_tool = ErrorSyntheticTool()
         chat = McpToolChat(
-            mock_client, mock_model, "System", mock_tool_cache, synthetic_tools=[error_tool]
+            mock_client, "System", mock_tool_cache, synthetic_tools=[error_tool]
         )
-        await chat.chat([UserMessage(content="Test")])
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None

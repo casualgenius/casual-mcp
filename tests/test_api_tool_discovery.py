@@ -19,6 +19,7 @@ from casual_llm import (
     AssistantMessage,
     AssistantToolCall,
     AssistantToolCallFunction,
+    Model,
     UserMessage,
 )
 
@@ -155,7 +156,7 @@ class TestGetChatPassesConfig:
         # Rather than importing main.py (which has module-level side effects),
         # we test the pattern used in get_chat directly.
         mock_client = AsyncMock()
-        mock_model = AsyncMock()
+        mock_model = AsyncMock(spec=Model)
         mock_model.get_usage = Mock(return_value=None)
         mock_tool_cache = Mock()
         mock_tool_cache.get_tools = AsyncMock(return_value=[])
@@ -164,12 +165,12 @@ class TestGetChatPassesConfig:
         config = config_with_discovery
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System prompt",
             tool_cache=mock_tool_cache,
             server_names=set(config.servers.keys()),
-            config=config,
         )
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
 
         assert chat._config is config
         assert chat._tool_discovery_config is not None
@@ -181,7 +182,7 @@ class TestGetChatPassesConfig:
         config = _make_config(servers={"math": {"defer_loading": False}})
 
         mock_client = AsyncMock()
-        mock_model = AsyncMock()
+        mock_model = AsyncMock(spec=Model)
         mock_model.get_usage = Mock(return_value=None)
         mock_tool_cache = Mock()
         mock_tool_cache.get_tools = AsyncMock(return_value=[])
@@ -189,12 +190,11 @@ class TestGetChatPassesConfig:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System prompt",
             tool_cache=mock_tool_cache,
             server_names=set(config.servers.keys()),
-            config=config,
         )
+        chat._config = config
 
         assert chat._config is config
         assert chat._tool_discovery_config is None
@@ -205,20 +205,19 @@ class TestGetChatPassesConfig:
     ) -> None:
         """_is_discovery_enabled should be False when config is None even with discovery_config."""
         mock_client = AsyncMock()
-        mock_model = AsyncMock()
+        mock_model = AsyncMock(spec=Model)
         mock_model.get_usage = Mock(return_value=None)
         mock_tool_cache = Mock()
         mock_tool_cache.get_tools = AsyncMock(return_value=[])
         mock_tool_cache.version = 1
 
-        # Explicitly pass tool_discovery_config without config
+        # Set tool_discovery_config without config
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System prompt",
             tool_cache=mock_tool_cache,
-            tool_discovery_config=ToolDiscoveryConfig(enabled=True),
         )
+        chat._tool_discovery_config = ToolDiscoveryConfig(enabled=True)
 
         # Even though tool_discovery_config.enabled is True,
         # _is_discovery_enabled() requires config to be non-None
@@ -245,7 +244,7 @@ class TestDiscoveryStatsInChat:
 
     @pytest.fixture
     def mock_model(self) -> AsyncMock:
-        model = AsyncMock()
+        model = AsyncMock(spec=Model)
         model.get_usage = Mock(return_value=None)
         return model
 
@@ -267,13 +266,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -298,13 +297,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"math"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -322,11 +321,10 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -365,13 +363,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -423,13 +421,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -471,13 +469,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -517,13 +515,13 @@ class TestDiscoveryStatsInChat:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Test")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -732,7 +730,7 @@ class TestAPIStatsWithDiscovery:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_model = AsyncMock()
+        mock_model = AsyncMock(spec=Model)
         mock_model.get_usage = Mock(return_value=None)
 
         tool_cache = Mock()
@@ -748,13 +746,13 @@ class TestAPIStatsWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
             server_names={"weather"},
-            config=config,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        chat._config = config
+        chat._tool_discovery_config = config.tool_discovery
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None
@@ -771,7 +769,7 @@ class TestAPIStatsWithDiscovery:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_model = AsyncMock()
+        mock_model = AsyncMock(spec=Model)
         mock_model.get_usage = Mock(return_value=None)
 
         tool_cache = Mock()
@@ -782,11 +780,10 @@ class TestAPIStatsWithDiscovery:
 
         chat = McpToolChat(
             mock_client,
-            mock_model,
             "System",
             tool_cache,
         )
-        await chat.chat([UserMessage(content="Hi")])
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         stats = chat.get_stats()
         assert stats is not None

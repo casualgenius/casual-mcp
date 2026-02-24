@@ -26,7 +26,8 @@ from casual_mcp.tool_cache import ToolCache
 from casual_mcp.tool_discovery import build_tool_server_map, partition_tools
 from casual_mcp.tool_filter import extract_server_and_tool, filter_tools_by_toolset
 from casual_mcp.tool_search_index import ToolSearchIndex
-from casual_mcp.utils import format_tool_call_result
+from casual_mcp.model_factory import ModelFactory
+from casual_mcp.utils import format_tool_call_result, load_mcp_client, render_system_prompt
 
 logger = get_logger("mcp_tool_chat")
 sessions: dict[str, list[ChatMessage]] = {}
@@ -58,51 +59,43 @@ class McpToolChat:
     tool calls via the MCP client (or synthetic tools), and feeding results
     back until the LLM produces a final answer.
 
-    When tool discovery is enabled (via ``config`` / ``tool_discovery_config``),
-    tools from deferred servers are not sent to the LLM upfront. Instead a
-    synthetic ``search_tools`` tool is injected that the LLM can use to find
-    and load tools on demand.
+    Use ``from_config()`` to create an instance with tool discovery and
+    model resolution wired automatically. When constructed directly, tool
+    discovery is not available — callers manage their own tool setup.
 
     Args:
         mcp_client: The MCP client used to execute tool calls.
-        model: The casual-llm ``Model`` instance for LLM inference.
-        system: Optional system prompt prepended to conversations.
+        system: Optional default system prompt prepended to conversations.
         tool_cache: Optional ``ToolCache`` for caching tool listings.
         server_names: Known MCP server names (used for tool-name parsing).
         synthetic_tools: Additional synthetic tools handled internally.
-        config: Full application ``Config`` (enables tool discovery when
-            ``config.tool_discovery`` is present and enabled).
-        tool_discovery_config: Explicit ``ToolDiscoveryConfig`` override.
-            If not provided, falls back to ``config.tool_discovery``.
+        model_factory: Optional ``ModelFactory`` for resolving model names
+            to ``Model`` instances at call time.
     """
 
     def __init__(
         self,
         mcp_client: Client[Any],
-        model: Model,
         system: str | None = None,
         tool_cache: ToolCache | None = None,
         server_names: set[str] | None = None,
         synthetic_tools: Sequence[SyntheticTool] = (),
-        config: Config | None = None,
-        tool_discovery_config: ToolDiscoveryConfig | None = None,
+        model_factory: ModelFactory | None = None,
     ):
-        self.model = model
         self.mcp_client = mcp_client
         self.system = system
         self.tool_cache = tool_cache or ToolCache(mcp_client)
         self.server_names = server_names or set()
+        self.model_factory = model_factory
         self._tool_cache_version = -1
         self._last_stats: ChatStats | None = None
         self._synthetic_registry: dict[str, SyntheticTool] = {
             st.name: st for st in synthetic_tools
         }
 
-        # Tool discovery configuration
-        self._config = config
-        self._tool_discovery_config = tool_discovery_config or (
-            config.tool_discovery if config is not None else None
-        )
+        # Tool discovery configuration (set by from_config())
+        self._config: Config | None = None
+        self._tool_discovery_config: ToolDiscoveryConfig | None = None
 
     @staticmethod
     def get_session(session_id: str) -> list[ChatMessage] | None:
@@ -126,12 +119,104 @@ class McpToolChat:
             and self._config is not None
         )
 
+    @classmethod
+    def from_config(
+        cls,
+        config: Config,
+        system: str | None = None,
+        synthetic_tools: Sequence[SyntheticTool] = (),
+    ) -> "McpToolChat":
+        """Create an ``McpToolChat`` instance from a ``Config`` object.
+
+        Internally builds the MCP client, tool cache, model factory, and
+        server names from the configuration. Model selection is deferred
+        to ``chat()``/``generate()`` call time.
+
+        Args:
+            config: The application configuration.
+            system: Optional default system prompt.
+            synthetic_tools: Additional synthetic tools handled internally.
+
+        Returns:
+            A fully-wired ``McpToolChat`` instance.
+        """
+        mcp_client = load_mcp_client(config)
+        tool_cache = ToolCache(mcp_client)
+        model_factory = ModelFactory(config)
+        server_names = set(config.servers.keys())
+
+        instance = cls(
+            mcp_client=mcp_client,
+            tool_cache=tool_cache,
+            server_names=server_names,
+            model_factory=model_factory,
+            system=system,
+            synthetic_tools=synthetic_tools,
+        )
+
+        # Wire up tool discovery (only available via from_config)
+        instance._config = config
+        instance._tool_discovery_config = config.tool_discovery
+
+        return instance
+
+    def _resolve_model(self, model: str | Model | None = None) -> Model:
+        """Resolve a model argument to a ``Model`` instance.
+
+        Resolution order:
+        1. If *model* is already a ``Model`` instance, use it directly.
+        2. If *model* is a string name, resolve via ``self.model_factory``.
+        3. If ``None``, raise ``ValueError``.
+        """
+        if model is None:
+            raise ValueError(
+                "No model specified. Provide a model to chat()/generate()."
+            )
+
+        if isinstance(model, Model):
+            return model
+
+        # It's a string name — resolve via factory
+        if self.model_factory is None:
+            raise ValueError(
+                f"Cannot resolve model name '{model}' without a model_factory. "
+                "Either pass a Model instance or provide a model_factory."
+            )
+        return self.model_factory.get_model(model)
+
+    async def _resolve_system_prompt(
+        self,
+        system: str | None = None,
+        model_name: str | None = None,
+    ) -> str | None:
+        """Resolve a system prompt for the current call.
+
+        Resolution order:
+        1. Explicit *system* param passed to ``chat()``/``generate()``.
+        2. If *model_name* is provided and its config has a ``template``,
+           render it using the current tool list.
+        3. Fall back to ``self.system`` (the constructor default).
+        """
+        if system is not None:
+            return system
+
+        # Try to resolve from model config template
+        if model_name and self._config:
+            model_config = self._config.models.get(model_name)
+            if model_config and model_config.template:
+                tools = await self.tool_cache.get_tools()
+                return render_system_prompt(f"{model_config.template}.j2", tools)
+
+        return self.system
+
     async def generate(
         self,
         prompt: str,
         session_id: str | None = None,
         tool_set: ToolSetConfig | None = None,
         meta: MetaDict | None = None,
+        model: str | Model | None = None,
+        system: str | None = None,
     ) -> list[ChatMessage]:
         """
         Generate a response to a prompt, optionally using session history.
@@ -144,6 +229,9 @@ class McpToolChat:
                   Useful for passing context like character_id without
                   exposing it to the LLM. Servers can access this via
                   ctx.request_context.meta.
+            model: Optional model override — a ``Model`` instance or a string
+                name to resolve via the model factory.
+            system: Optional system prompt override for this call.
 
         Returns:
             List of response messages including any tool calls and results
@@ -164,7 +252,9 @@ class McpToolChat:
             add_messages_to_session(session_id, [user_message])
 
         # Perform Chat
-        response = await self.chat(messages=messages, tool_set=tool_set, meta=meta)
+        response = await self.chat(
+            messages=messages, tool_set=tool_set, meta=meta, model=model, system=system
+        )
 
         # Add responses to session
         if session_id:
@@ -177,6 +267,8 @@ class McpToolChat:
         messages: list[ChatMessage],
         tool_set: ToolSetConfig | None = None,
         meta: MetaDict | None = None,
+        model: str | Model | None = None,
+        system: str | None = None,
     ) -> list[ChatMessage]:
         """
         Process a conversation with tool calling support.
@@ -188,10 +280,18 @@ class McpToolChat:
                   Useful for passing context like character_id without
                   exposing it to the LLM. Servers can access this via
                   ctx.request_context.meta.
+            model: Optional model override — a ``Model`` instance or a string
+                name to resolve via the model factory.
+            system: Optional system prompt override for this call.
 
         Returns:
             List of response messages including any tool calls and results
         """
+        # Resolve model and system prompt for this call
+        resolved_model = self._resolve_model(model)
+        model_name = model if isinstance(model, str) else None
+        resolved_system = await self._resolve_system_prompt(system, model_name)
+
         tools = await self.tool_cache.get_tools()
 
         # Filter tools if a toolset is specified
@@ -266,10 +366,10 @@ class McpToolChat:
 
         # Add a system message if required
         has_system_message = any(message.role == "system" for message in messages)
-        if self.system and not has_system_message:
+        if resolved_system and not has_system_message:
             # Insert the system message at the start of the messages
             logger.debug("Adding System Message")
-            messages.insert(0, SystemMessage(content=self.system))
+            messages.insert(0, SystemMessage(content=resolved_system))
 
         # Build combined tool list: MCP tools + synthetic tool definitions
         synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
@@ -297,11 +397,11 @@ class McpToolChat:
 
             logger.info("Calling the LLM")
             all_tools = tools_from_mcp(loaded_tools) + synthetic_definitions
-            ai_message = await self.model.chat(messages=messages, tools=all_tools)
+            ai_message = await resolved_model.chat(messages=messages, tools=all_tools)
 
             # Accumulate token usage stats
             self._last_stats.llm_calls += 1
-            usage = self.model.get_usage()
+            usage = resolved_model.get_usage()
             if usage:
                 prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 completion_tokens = getattr(usage, "completion_tokens", 0) or 0

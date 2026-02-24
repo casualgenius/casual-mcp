@@ -49,11 +49,15 @@ casual-mcp tools                              # List available tools
 
 **`McpToolChat`** ([src/casual_mcp/mcp_tool_chat.py](src/casual_mcp/mcp_tool_chat.py))
 - Orchestrates LLM interaction with tools using a recursive loop
-- Accepts a `Model` instance from casual-llm
+- **`from_config(config)`** classmethod builds all dependencies from a `Config` object (recommended)
+- Model selection at call time: `chat(messages, model="gpt-4.1")` or `generate(prompt, model="gpt-4.1")`
+- System prompt resolved per-call: explicit `system` param > model template > constructor default
+- Constructor takes `(mcp_client, system, tool_cache, server_names, synthetic_tools, model_factory)` — no `model` or `config`
+- Tool discovery and config are wired internally by `from_config()`; manual construction does not support discovery
 - Manages chat sessions (stored in-memory, for testing/development only)
 - Two main methods:
-  - `generate(prompt, session_id)` - Simple prompt-based interface with optional session
-  - `chat(messages)` - Takes full message list for more control
+  - `generate(prompt, session_id, model, system)` - Simple prompt-based interface with optional session
+  - `chat(messages, model, system)` - Takes full message list for more control
 - Executes tools via the MCP client and feeds results back to the LLM
 - Automatically converts MCP tools to casual-llm format via `convert_tools`
 
@@ -200,7 +204,7 @@ prompt-templates/              # Jinja2 templates for system prompts
 
 ## Key Design Patterns
 
-1. **casual-llm Integration**: All LLM clients and models come from the casual-llm library. `ModelFactory` creates clients via `create_client()` and models via `create_model()` based on client and model config. `McpToolChat` accepts a `Model` instance from casual-llm.
+1. **casual-llm Integration**: All LLM clients and models come from the casual-llm library. `ModelFactory` creates clients via `create_client()` and models via `create_model()` based on client and model config. `McpToolChat` accepts a `Model` instance or resolves model names via `ModelFactory`. The MCP client uses FastMCP 3.x.
 
 2. **Tool Format Conversion**: MCP tools are automatically converted to casual-llm's `Tool` format using `convert_tools.py`. This happens transparently in `McpToolChat.chat()` before calling the model.
 
@@ -209,6 +213,7 @@ prompt-templates/              # Jinja2 templates for system prompts
 4. **Two-Tier Caching**: `ModelFactory` caches clients by name and models by name. Multiple models referencing the same client name reuse a single client connection.
 
 5. **Recursive Tool Calling Loop**: `McpToolChat.chat()` implements the agentic loop:
+   - Resolve model (from `model` param, factory, or constructor default) and system prompt
    - Send messages + tools to LLM
    - LLM responds (possibly with tool calls)
    - Execute tool calls via MCP client (or synthetic tools internally)
@@ -219,7 +224,7 @@ prompt-templates/              # Jinja2 templates for system prompts
 
 7. **Message Types from casual-llm**: All message types (`SystemMessage`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ChatMessage`) are imported from casual-llm and re-exported from `casual_mcp.models` for backwards compatibility.
 
-8. **Config Loading**: Use `load_config()` and `load_mcp_client()` from `utils.py` to bootstrap the application. Config is loaded from `casual_mcp_config.json`.
+8. **Config Loading**: Use `load_config()` from `utils.py` to load configuration, then `McpToolChat.from_config(config)` to create a fully-wired instance. For manual setup, use `load_mcp_client()` from `utils.py`. Config is loaded from `casual_mcp_config.json`.
 
 9. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search_tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
 
