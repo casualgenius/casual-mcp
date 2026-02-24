@@ -245,26 +245,20 @@ class TestGetByNames:
     """Tests for the get_by_names() method."""
 
     def test_all_names_found(self, index: ToolSearchIndex) -> None:
-        found, not_found = index.get_by_names(
-            ["search_brave_web_search", "math_add"]
-        )
+        found, not_found = index.get_by_names(["search_brave_web_search", "math_add"])
         assert len(found) == 2
         assert not_found == []
         names = {tool.name for _, tool in found}
         assert names == {"search_brave_web_search", "math_add"}
 
     def test_correct_server_names(self, index: ToolSearchIndex) -> None:
-        found, _ = index.get_by_names(
-            ["search_brave_web_search", "weather_get_forecast"]
-        )
+        found, _ = index.get_by_names(["search_brave_web_search", "weather_get_forecast"])
         server_map = {tool.name: server for server, tool in found}
         assert server_map["search_brave_web_search"] == "search"
         assert server_map["weather_get_forecast"] == "weather"
 
     def test_some_names_not_found(self, index: ToolSearchIndex) -> None:
-        found, not_found = index.get_by_names(
-            ["math_add", "nonexistent_tool", "also_missing"]
-        )
+        found, not_found = index.get_by_names(["math_add", "nonexistent_tool", "also_missing"])
         assert len(found) == 1
         assert found[0][1].name == "math_add"
         assert sorted(not_found) == ["also_missing", "nonexistent_tool"]
@@ -336,9 +330,7 @@ class TestEdgeCases:
         server_name, _ = results[0]
         assert server_name == "unknown"
 
-    def test_search_with_max_results_larger_than_matches(
-        self, index: ToolSearchIndex
-    ) -> None:
+    def test_search_with_max_results_larger_than_matches(self, index: ToolSearchIndex) -> None:
         """max_results larger than actual matches should return all matches."""
         results = index.search("multiply", max_results=100)
         # Should return matching results without error

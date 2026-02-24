@@ -87,10 +87,7 @@ async def main():
     # Show stats
     stats = chat.get_stats()
     if stats:
-        print(
-            f"\nStats: {stats.tool_calls.total} tool calls, "
-            f"{stats.llm_calls} LLM calls"
-        )
+        print(f"\nStats: {stats.tool_calls.total} tool calls, " f"{stats.llm_calls} LLM calls")
 
     # Clean up MCP client connections
     await mcp_client.close()

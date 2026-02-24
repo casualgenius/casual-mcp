@@ -216,7 +216,6 @@ class TestMcpToolChat:
         assert response[0].content == "Final response"
 
 
-
 class TestMcpToolChatStats:
     """Tests for McpToolChat stats functionality."""
 
@@ -355,9 +354,7 @@ class TestMcpToolChatStats:
             return_value=Mock(content=[MockContent()], structuredContent=None)
         )
 
-        chat = McpToolChat(
-            mock_client, "System", mock_tool_cache, server_names={"math", "words"}
-        )
+        chat = McpToolChat(mock_client, "System", mock_tool_cache, server_names={"math", "words"})
         await chat.chat([UserMessage(content="Test")], model=model)
 
         stats = chat.get_stats()
@@ -440,9 +437,7 @@ class TestMcpToolChatStats:
         )
 
         # With server_names containing "my_awesome", the tool should be attributed correctly
-        chat = McpToolChat(
-            mock_client, "System", mock_tool_cache, server_names={"my_awesome"}
-        )
+        chat = McpToolChat(mock_client, "System", mock_tool_cache, server_names={"my_awesome"})
         await chat.chat([UserMessage(content="Test")], model=model)
 
         stats = chat.get_stats()
@@ -547,9 +542,7 @@ class TestSystemPromptResolution:
         mock_tool_cache = Mock()
         mock_tool_cache.get_tools = AsyncMock(return_value=[])
 
-        chat = McpToolChat(
-            mock_client, tool_cache=mock_tool_cache, system="default"
-        )
+        chat = McpToolChat(mock_client, tool_cache=mock_tool_cache, system="default")
         chat._config = config
 
         with patch(
@@ -573,9 +566,7 @@ class TestSystemPromptResolution:
 
         chat = McpToolChat(mock_client)
         chat._config = config
-        result = await chat._resolve_system_prompt(
-            system="explicit", model_name="gpt-4.1"
-        )
+        result = await chat._resolve_system_prompt(system="explicit", model_name="gpt-4.1")
         assert result == "explicit"
 
 
@@ -678,11 +669,7 @@ class TestMcpToolChatFromConfig:
     async def test_system_prompt_resolved_from_model_template(self):
         """When model has template config and no explicit system, template should be used."""
         config = _make_config(
-            models={
-                "gpt-4.1": McpModelConfig(
-                    client="openai", model="gpt-4.1", template="custom"
-                )
-            },
+            models={"gpt-4.1": McpModelConfig(client="openai", model="gpt-4.1", template="custom")},
         )
 
         with patch("casual_mcp.mcp_tool_chat.load_mcp_client"):
@@ -714,11 +701,7 @@ class TestMcpToolChatFromConfig:
     async def test_explicit_system_overrides_template(self):
         """Explicit system param should override model template."""
         config = _make_config(
-            models={
-                "gpt-4.1": McpModelConfig(
-                    client="openai", model="gpt-4.1", template="custom"
-                )
-            },
+            models={"gpt-4.1": McpModelConfig(client="openai", model="gpt-4.1", template="custom")},
         )
 
         with patch("casual_mcp.mcp_tool_chat.load_mcp_client"):
