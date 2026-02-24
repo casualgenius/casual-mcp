@@ -2,7 +2,7 @@
 
 Synthetic tools are intercepted in the McpToolChat loop and executed locally
 rather than being forwarded to MCP servers. This enables features like tool
-discovery (search_tools) that operate on internal state.
+discovery (search-tools) that operate on internal state.
 """
 
 from typing import Any, NamedTuple, Protocol
@@ -18,7 +18,7 @@ class SyntheticToolResult(NamedTuple):
         content: The text content to return to the LLM.
         newly_loaded_tools: MCP tools to add to the loaded tool set.
             Used by the chat loop for dynamic tool expansion (e.g.,
-            loading tools found via search_tools).
+            loading tools found via search-tools).
     """
 
     content: str

@@ -3,7 +3,7 @@ Example: Chat with tool discovery.
 
 Demonstrates how to use tool discovery to defer tool loading. Instead of
 sending all tool definitions to the LLM on every call, deferred tools are
-made available through a ``search_tools`` meta-tool that the LLM can invoke
+made available through a ``search-tools`` meta-tool that the LLM can invoke
 on demand.
 
 Requires a ``casual_mcp_config.json`` with ``tool_discovery`` enabled and at
@@ -73,7 +73,7 @@ async def main():
 
     if deferred_by_server:
         total_deferred = sum(len(t) for t in deferred_by_server.values())
-        print(f"Deferred (available via search_tools): {total_deferred}")
+        print(f"Deferred (available via search-tools): {total_deferred}")
         for server, tools in deferred_by_server.items():
             print(f"  [{server}]")
             for tool in tools:
@@ -84,10 +84,10 @@ async def main():
         await chat.mcp_client.close()
         return
 
-    # The LLM will automatically use search_tools to find deferred tools
+    # The LLM will automatically use search-tools to find deferred tools
     prompt = "What's the weather in Paris?"
     print(f"\nUser: {prompt}")
-    print("(The LLM should call search_tools to find weather tools, then use them)\n")
+    print("(The LLM should call search-tools to find weather tools, then use them)\n")
 
     messages = [UserMessage(content=prompt)]
     response_messages = await chat.chat(messages, model=MODEL_NAME)
@@ -97,26 +97,17 @@ async def main():
         if msg.role == "assistant":
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
-                    print(
-                        f"  Tool call: {tc.function.name}({tc.function.arguments})"
-                    )
+                    print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
             if msg.content:
                 print(f"\nAssistant: {msg.content}")
         elif msg.role == "tool":
-            content = (
-                msg.content[:200] + "..."
-                if len(msg.content) > 200
-                else msg.content
-            )
+            content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
             print(f"  Tool result ({msg.name}): {content}")
 
     # Show discovery stats
     stats = chat.get_stats()
     if stats:
-        print(
-            f"\nStats: {stats.llm_calls} LLM calls, "
-            f"{stats.tool_calls.total} tool calls"
-        )
+        print(f"\nStats: {stats.llm_calls} LLM calls, " f"{stats.tool_calls.total} tool calls")
         if stats.discovery:
             print(
                 f"Discovery: {stats.discovery.search_calls} search calls, "

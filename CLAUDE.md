@@ -82,7 +82,7 @@ casual-mcp tools                              # List available tools
 **Tool Discovery** ([src/casual_mcp/tool_discovery.py](src/casual_mcp/tool_discovery.py), [src/casual_mcp/search_tools_tool.py](src/casual_mcp/search_tools_tool.py))
 - Enables on-demand tool loading to reduce the number of tools sent to the LLM
 - Partitions tools into "loaded" (sent immediately) and "deferred" (discoverable on demand)
-- Injects a synthetic `search_tools` tool that the LLM can call to find and load deferred tools
+- Injects a synthetic `search-tools` tool that the LLM can call to find and load deferred tools
 - Uses BM25 keyword search ([src/casual_mcp/tool_search_index.py](src/casual_mcp/tool_search_index.py)) for relevance-ranked discovery
 - See [Tool Discovery](#tool-discovery) section below for full details
 
@@ -90,7 +90,7 @@ casual-mcp tools                              # List available tools
 - Protocol for tools handled internally by casual-mcp (not forwarded to MCP servers)
 - `SyntheticTool` - Protocol defining `name`, `definition`, and `execute()` interface
 - `SyntheticToolResult` - NamedTuple with `content` (str) and `newly_loaded_tools` (list of MCP tools)
-- Used by the chat loop to intercept and execute special tools like `search_tools`
+- Used by the chat loop to intercept and execute special tools like `search-tools`
 
 **Models** ([src/casual_mcp/models/](src/casual_mcp/models/))
 - Message types are imported from casual-llm: `SystemMessage`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ChatMessage`, `AssistantToolCall`
@@ -219,13 +219,13 @@ prompt-templates/              # Jinja2 templates for system prompts
 
 7. **Config Loading**: Use `load_config()` from `utils.py` to load configuration, then `McpToolChat.from_config(config)` to create a fully-wired instance. For manual setup, use `load_mcp_client()` from `utils.py`. Config is loaded from `casual_mcp_config.json`.
 
-8. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search_tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
+8. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search-tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
 
 9. **Synthetic Tool Protocol**: Internal tools that are handled by casual-mcp itself (not forwarded to MCP servers). The `SyntheticTool` protocol defines the interface; `SearchToolsTool` is the primary implementation. Synthetic tools are dispatched in the chat loop before MCP tool execution.
 
 ## Tool Discovery
 
-Tool discovery allows you to defer loading tools from specific MCP servers, reducing the number of tool definitions sent to the LLM on each call. Instead of receiving all tools upfront, the LLM is given a `search_tools` meta-tool that it can use to find and load the tools it needs on demand.
+Tool discovery allows you to defer loading tools from specific MCP servers, reducing the number of tool definitions sent to the LLM on each call. Instead of receiving all tools upfront, the LLM is given a `search-tools` meta-tool that it can use to find and load the tools it needs on demand.
 
 ### Why Use Tool Discovery
 
@@ -283,7 +283,7 @@ Add a `tool_discovery` section to `casual_mcp_config.json` and set `defer_loadin
 |-------|------|---------|-------------|
 | `tool_discovery.enabled` | `bool` | `false` | Master switch for tool discovery |
 | `tool_discovery.defer_all` | `bool` | `false` | Defer all servers regardless of per-server `defer_loading` |
-| `tool_discovery.max_search_results` | `int` | `5` | Maximum tools returned per `search_tools` call (minimum: 1) |
+| `tool_discovery.max_search_results` | `int` | `5` | Maximum tools returned per `search-tools` call (minimum: 1) |
 | `servers.*.defer_loading` | `bool` | `false` | Defer tools from this specific server |
 
 ### How It Works
@@ -292,20 +292,20 @@ Add a `tool_discovery` section to `casual_mcp_config.json` and set `defer_loadin
    - **Loaded tools**: Sent to the LLM immediately (from servers without `defer_loading`)
    - **Deferred tools**: Held back, organized by server name
 
-2. **search_tools Injection**: If any deferred tools exist, a synthetic `search_tools` tool is automatically injected into the tool list sent to the LLM. Its description includes a manifest of all deferred servers and their tools.
+2. **search-tools Injection**: If any deferred tools exist, a synthetic `search-tools` tool is automatically injected into the tool list sent to the LLM. Its description includes a manifest of all deferred servers and their tools.
 
-3. **LLM Searches for Tools**: When the LLM needs a tool that is not in its loaded set, it calls `search_tools` with one or more of:
+3. **LLM Searches for Tools**: When the LLM needs a tool that is not in its loaded set, it calls `search-tools` with one or more of:
    - `query` (string) - BM25 keyword search across tool names and descriptions
    - `server_name` (string) - Load all tools from a specific server
    - `tool_names` (array of strings) - Load tools by exact name
 
-4. **Dynamic Tool Expansion**: Tools found by `search_tools` are added to the loaded set for all subsequent LLM calls within the same chat session. The LLM can then call these tools normally.
+4. **Dynamic Tool Expansion**: Tools found by `search-tools` are added to the loaded set for all subsequent LLM calls within the same chat session. The LLM can then call these tools normally.
 
 5. **Statistics Tracking**: When tool discovery is enabled, `ChatStats.discovery` is populated with a `DiscoveryStats` object tracking `search_calls` and `tools_discovered`.
 
-### The search_tools Tool
+### The search-tools Tool
 
-The `search_tools` tool is a synthetic tool (handled internally, not forwarded to MCP servers) that supports three search modes:
+The `search-tools` tool is a synthetic tool (handled internally, not forwarded to MCP servers) that supports three search modes:
 
 **Keyword search** (`query` parameter):
 - Uses BM25 (Okapi) ranking over tool names and descriptions
@@ -330,7 +330,7 @@ The tool returns formatted details including each tool's server, description, an
 
 ### Manifest Format
 
-The `search_tools` tool description includes a manifest of all deferred servers and their tools. The manifest is generated by `generate_manifest()` and follows this format:
+The `search-tools` tool description includes a manifest of all deferred servers and their tools. The manifest is generated by `generate_manifest()` and follows this format:
 
 ```
 - server-name (N tools): tool_a, tool_b, tool_c
@@ -350,15 +350,15 @@ Tool discovery and toolsets work together:
 
 ### Edge Cases and Expected Behavior
 
-**No deferred tools**: If tool discovery is enabled but no servers have `defer_loading: true` (and `defer_all` is false), all tools are loaded eagerly and `search_tools` is not injected. Discovery stats are still tracked but `search_calls` and `tools_discovered` will be 0.
+**No deferred tools**: If tool discovery is enabled but no servers have `defer_loading: true` (and `defer_all` is false), all tools are loaded eagerly and `search-tools` is not injected. Discovery stats are still tracked but `search_calls` and `tools_discovered` will be 0.
 
-**Calling a deferred tool without searching first**: If the LLM attempts to call a deferred tool that has not been loaded via `search_tools`, the chat loop returns an error message: `"Error: Tool '{name}' is not yet loaded. Use the 'search_tools' tool to discover and load it first, then call it again."`
+**Calling a deferred tool without searching first**: If the LLM attempts to call a deferred tool that has not been loaded via `search-tools`, the chat loop returns an error message: `"Error: Tool '{name}' is not yet loaded. Use the 'search-tools' tool to discover and load it first, then call it again."`
 
-**Tool cache refresh mid-session**: If the tool cache TTL expires and tools are refreshed during an active chat session, the discovery index is rebuilt automatically. Tools that were previously loaded via `search_tools` remain loaded even after the rebuild.
+**Tool cache refresh mid-session**: If the tool cache TTL expires and tools are refreshed during an active chat session, the discovery index is rebuilt automatically. Tools that were previously loaded via `search-tools` remain loaded even after the rebuild.
 
 **Empty search results**: If a keyword search returns no matches, the tool returns a message like `"No tools found matching '{query}'."` The LLM can then refine its search.
 
-**`defer_all: true`**: Overrides all per-server `defer_loading` settings. Every server's tools are deferred, so only the `search_tools` tool is available initially.
+**`defer_all: true`**: Overrides all per-server `defer_loading` settings. Every server's tools are deferred, so only the `search-tools` tool is available initially.
 
 **Unknown server in tool name resolution**: If a tool's server cannot be determined from its name prefix, it is loaded eagerly (not deferred) to avoid silently hiding tools.
 

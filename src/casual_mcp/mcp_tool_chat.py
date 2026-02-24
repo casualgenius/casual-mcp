@@ -71,9 +71,7 @@ class McpToolChat:
         self.model_factory = model_factory
         self._tool_cache_version = -1
         self._last_stats: ChatStats | None = None
-        self._synthetic_registry: dict[str, SyntheticTool] = {
-            st.name: st for st in synthetic_tools
-        }
+        self._synthetic_registry: dict[str, SyntheticTool] = {st.name: st for st in synthetic_tools}
 
         # Tool discovery configuration (set by from_config())
         self._config: Config | None = None
@@ -146,9 +144,7 @@ class McpToolChat:
         3. If ``None``, raise ``ValueError``.
         """
         if model is None:
-            raise ValueError(
-                "No model specified. Provide a model to chat()."
-            )
+            raise ValueError("No model specified. Provide a model to chat().")
 
         if isinstance(model, Model):
             return model
@@ -228,7 +224,7 @@ class McpToolChat:
 
         # --- Tool discovery: partition tools and set up search ---
         # Build a per-call synthetic registry that includes both the
-        # statically registered synthetic tools and the dynamic search_tools.
+        # statically registered synthetic tools and the dynamic search-tools.
         call_synthetic_registry = dict(self._synthetic_registry)
 
         # Track deferred tool names for error interception
@@ -261,9 +257,7 @@ class McpToolChat:
                 all_deferred_tools = [
                     t for server_tools in deferred_by_server.values() for t in server_tools
                 ]
-                tool_server_map = build_tool_server_map(
-                    all_deferred_tools, self.server_names
-                )
+                tool_server_map = build_tool_server_map(all_deferred_tools, self.server_names)
                 search_index = ToolSearchIndex(all_deferred_tools, tool_server_map)
 
                 # Create SearchToolsTool for this call
@@ -280,12 +274,11 @@ class McpToolChat:
 
                 logger.info(
                     f"Tool discovery enabled: {len(loaded_tools)} loaded, "
-                    f"{len(deferred_tool_names)} deferred, search_tools injected"
+                    f"{len(deferred_tool_names)} deferred, search-tools injected"
                 )
             else:
                 logger.debug(
-                    "Tool discovery enabled but no deferred tools - "
-                    "search_tools not injected"
+                    "Tool discovery enabled but no deferred tools - " "search-tools not injected"
                 )
 
         # Add a system message if required
@@ -302,10 +295,7 @@ class McpToolChat:
         response_messages: list[ChatMessage] = []
         while True:
             # Check for tool cache version changes mid-session
-            if (
-                self._is_discovery_enabled()
-                and self.tool_cache.version != current_cache_version
-            ):
+            if self._is_discovery_enabled() and self.tool_cache.version != current_cache_version:
                 logger.info("Tool cache version changed mid-session, rebuilding discovery index")
                 current_cache_version = self.tool_cache.version
                 loaded_tools, deferred_tool_names, call_synthetic_registry = (
@@ -315,9 +305,7 @@ class McpToolChat:
                         base_synthetic_registry=self._synthetic_registry,
                     )
                 )
-                synthetic_definitions = [
-                    st.definition for st in call_synthetic_registry.values()
-                ]
+                synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
 
             logger.info("Calling the LLM")
             all_tools = tools_from_mcp(loaded_tools) + synthetic_definitions
@@ -365,7 +353,7 @@ class McpToolChat:
                             tool_call_id=tool_call.id,
                             content=(
                                 f"Error: Tool '{tool_name}' is not yet loaded. "
-                                f"Use the 'search_tools' tool to discover and load "
+                                f"Use the 'search-tools' tool to discover and load "
                                 f"it first, then call it again."
                             ),
                         )
@@ -374,16 +362,11 @@ class McpToolChat:
                         result, newly_loaded = await self._execute_synthetic_with_expansion(
                             tool_call, registry=call_synthetic_registry
                         )
-                        # Track discovery stats for search_tools calls
-                        if (
-                            tool_name == "search_tools"
-                            and self._last_stats.discovery is not None
-                        ):
+                        # Track discovery stats for search-tools calls
+                        if tool_name == "search-tools" and self._last_stats.discovery is not None:
                             self._last_stats.discovery.search_calls += 1
-                            self._last_stats.discovery.tools_discovered += len(
-                                newly_loaded
-                            )
-                        # Handle newly loaded tools from search_tools execution
+                            self._last_stats.discovery.tools_discovered += len(newly_loaded)
+                        # Handle newly loaded tools from search-tools execution
                         if newly_loaded:
                             loaded_tools.extend(newly_loaded)
                             for new_tool in newly_loaded:
@@ -394,7 +377,7 @@ class McpToolChat:
                             ]
                             logger.info(
                                 f"Expanded loaded tools by {len(newly_loaded)} "
-                                f"from search_tools"
+                                f"from search-tools"
                             )
                     else:
                         result = await self.execute(tool_call, meta=meta)
@@ -429,14 +412,14 @@ class McpToolChat:
         """Rebuild tool discovery state after a tool cache version change.
 
         Fetches fresh tools, re-partitions, and rebuilds the search index
-        while preserving tools that were already loaded via search_tools.
+        while preserving tools that were already loaded via search-tools.
 
         Args:
             tool_set: Optional toolset filter to apply.
             loaded_tools: Currently loaded MCP tools (includes previously
                 discovered tools).
             base_synthetic_registry: The static synthetic tool registry
-                (excludes per-call search_tools).
+                (excludes per-call search-tools).
 
         Returns:
             Tuple of (new_loaded_tools, new_deferred_names, new_call_registry).
@@ -482,9 +465,7 @@ class McpToolChat:
         new_call_registry = dict(base_synthetic_registry)
 
         if deferred_by_server:
-            all_deferred = [
-                t for server_tools in deferred_by_server.values() for t in server_tools
-            ]
+            all_deferred = [t for server_tools in deferred_by_server.values() for t in server_tools]
             tool_server_map = build_tool_server_map(all_deferred, self.server_names)
             search_index = ToolSearchIndex(all_deferred, tool_server_map)
             deferred_server_names = sorted(deferred_by_server.keys())

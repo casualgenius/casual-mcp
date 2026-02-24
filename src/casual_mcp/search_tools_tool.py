@@ -66,7 +66,7 @@ def generate_manifest(
 ) -> str:
     """Produce a compressed text manifest of deferred tools grouped by server.
 
-    The manifest is intended to be embedded inside the ``search_tools`` tool
+    The manifest is intended to be embedded inside the ``search-tools`` tool
     description so the LLM knows what is available for discovery.
 
     Format per server::
@@ -160,7 +160,7 @@ class SearchToolsTool:
         config: ``ToolDiscoveryConfig`` providing ``max_search_results``.
     """
 
-    _TOOL_NAME = "search_tools"
+    _TOOL_NAME = "search-tools"
 
     def __init__(
         self,
@@ -220,8 +220,7 @@ class SearchToolsTool:
                     "query": {
                         "type": "string",
                         "description": (
-                            "Keyword search query to find relevant tools"
-                            " by name or description."
+                            "Keyword search query to find relevant tools" " by name or description."
                         ),
                     },
                     "server_name": {
@@ -242,7 +241,7 @@ class SearchToolsTool:
         )
 
     async def execute(self, args: dict[str, Any]) -> SyntheticToolResult:
-        """Execute the search_tools tool with the given arguments.
+        """Execute the search-tools tool with the given arguments.
 
         Supports the following parameter combinations:
 
@@ -278,10 +277,7 @@ class SearchToolsTool:
         if server_name is not None and server_name not in self._server_names:
             valid = ", ".join(sorted(self._server_names))
             return SyntheticToolResult(
-                content=(
-                    f"Error: Unknown server '{server_name}'. "
-                    f"Valid servers: {valid}."
-                ),
+                content=(f"Error: Unknown server '{server_name}'. " f"Valid servers: {valid}."),
                 newly_loaded_tools=[],
             )
 
@@ -352,9 +348,7 @@ class SearchToolsTool:
         text_parts.append("\n\n".join(details_parts))
 
         if already_loaded:
-            text_parts.append(
-                f"\n\nAlready loaded: {', '.join(already_loaded)}"
-            )
+            text_parts.append(f"\n\nAlready loaded: {', '.join(already_loaded)}")
 
         if not_found_msg:
             text_parts.append(f"\n\n{not_found_msg}")
@@ -362,7 +356,7 @@ class SearchToolsTool:
         content = "".join(text_parts)
 
         logger.debug(
-            f"search_tools: {len(newly_loaded)} newly loaded, "
+            f"search-tools: {len(newly_loaded)} newly loaded, "
             f"{len(already_loaded)} already loaded"
         )
 

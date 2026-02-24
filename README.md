@@ -90,7 +90,7 @@ See [Configuration Guide](docs/configuration.md) for full details on models, ser
 
 ## Tool Discovery
 
-When connecting many MCP servers, the combined tool definitions can consume significant context and degrade tool selection accuracy. Tool discovery solves this by deferring tool loading -- instead of sending all tools to the LLM on every call, deferred tools are made available through a `search_tools` meta-tool that the LLM can invoke on demand.
+When connecting many MCP servers, the combined tool definitions can consume significant context and degrade tool selection accuracy. Tool discovery solves this by deferring tool loading -- instead of sending all tools to the LLM on every call, deferred tools are made available through a `search-tools` meta-tool that the LLM can invoke on demand.
 
 Add `tool_discovery` to your config and mark servers with `defer_loading`:
 
@@ -115,8 +115,8 @@ Add `tool_discovery` to your config and mark servers with `defer_loading`:
 How it works:
 
 1. Tools from servers with `defer_loading: true` are held back from the LLM
-2. A `search_tools` tool is injected with a compressed manifest of available servers and tools
-3. The LLM calls `search_tools` with a keyword query, server name, or exact tool names
+2. A `search-tools` tool is injected with a compressed manifest of available servers and tools
+3. The LLM calls `search-tools` with a keyword query, server name, or exact tool names
 4. Matched tools are loaded into the active set for the remainder of the conversation
 5. Set `defer_all: true` to defer all servers without marking each individually
 

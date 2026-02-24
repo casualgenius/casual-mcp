@@ -7,7 +7,7 @@ class ToolDiscoveryConfig(BaseModel):
     """Configuration for the tool discovery system.
 
     When enabled, tools from servers marked with defer_loading=True are not
-    loaded eagerly. Instead, a synthetic 'search_tools' tool is injected
+    loaded eagerly. Instead, a synthetic 'search-tools' tool is injected
     that allows the LLM to discover and load deferred tools on demand via
     BM25 keyword search.
 

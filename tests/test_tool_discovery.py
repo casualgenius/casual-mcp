@@ -3,13 +3,13 @@
 Covers:
 - partition_tools helper
 - McpToolChat configuration acceptance
-- Full chat loop with tool discovery (search_tools injected/not injected)
-- Tool discovered via search_tools and subsequently used
+- Full chat loop with tool discovery (search-tools injected/not injected)
+- Tool discovered via search-tools and subsequently used
 - Deferred tool called without search returns error
 - Multiple search calls expanding the tool set
 - Tool cache version change triggers rebuild
 - Toolset filtering respected for deferred tools
-- Stats tracking for search_tools calls
+- Stats tracking for search-tools calls
 """
 
 from __future__ import annotations
@@ -35,7 +35,6 @@ from casual_mcp.models.tool_discovery_config import ToolDiscoveryConfig
 from casual_mcp.models.toolset_config import ToolSetConfig
 from casual_mcp.synthetic_tool import SyntheticToolResult
 from casual_mcp.tool_discovery import build_tool_server_map, partition_tools
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -307,7 +306,7 @@ class TestChatLoopWithDiscovery:
     async def test_search_tools_injected_when_deferred_exist(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """search_tools should be injected when deferred tools exist."""
+        """search-tools should be injected when deferred tools exist."""
         tools = [
             _make_tool("math_add", "Add two numbers"),
             _make_tool("weather_get", "Get weather"),
@@ -327,10 +326,10 @@ class TestChatLoopWithDiscovery:
         )
         await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
-        # Check that the model was called with search_tools in the tool list
+        # Check that the model was called with search-tools in the tool list
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" in tool_names
+        assert "search-tools" in tool_names
         assert "math_add" in tool_names
         # weather_get should NOT be in the tool list (it's deferred)
         assert "weather_get" not in tool_names
@@ -338,7 +337,7 @@ class TestChatLoopWithDiscovery:
     async def test_search_tools_not_injected_when_no_deferred(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """search_tools should NOT be injected when all tools are loaded."""
+        """search-tools should NOT be injected when all tools are loaded."""
         tools = [_make_tool("math_add", "Add")]
 
         mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
@@ -354,13 +353,13 @@ class TestChatLoopWithDiscovery:
 
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" not in tool_names
+        assert "search-tools" not in tool_names
         assert "math_add" in tool_names
 
     async def test_search_tools_not_injected_when_discovery_disabled(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """search_tools should NOT be injected when discovery is disabled."""
+        """search-tools should NOT be injected when discovery is disabled."""
         tools = [_make_tool("weather_get", "Get weather")]
 
         mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
@@ -377,7 +376,7 @@ class TestChatLoopWithDiscovery:
 
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" not in tool_names
+        assert "search-tools" not in tool_names
         # All tools should be loaded (discovery disabled)
         assert "weather_get" in tool_names
 
@@ -419,11 +418,11 @@ class TestDiscoverAndUseFlow:
             discovery=ToolDiscoveryConfig(enabled=True),
         )
 
-        # Step 1: LLM calls search_tools to find weather tool
+        # Step 1: LLM calls search-tools to find weather tool
         search_call = AssistantToolCall(
             id="call_search",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "weather forecast"}',
             ),
         )
@@ -433,7 +432,7 @@ class TestDiscoverAndUseFlow:
             id="call_weather",
             function=AssistantToolCallFunction(
                 name="weather_get_forecast",
-                arguments='{}',
+                arguments="{}",
             ),
         )
 
@@ -447,7 +446,7 @@ class TestDiscoverAndUseFlow:
         )
 
         # Model responses:
-        # 1st call: LLM calls search_tools
+        # 1st call: LLM calls search-tools
         # 2nd call: LLM calls weather_get_forecast (now loaded)
         # 3rd call: LLM gives final answer
         mock_model.chat = AsyncMock(
@@ -470,14 +469,14 @@ class TestDiscoverAndUseFlow:
         response = await chat.chat([UserMessage(content="What's the weather?")], model=mock_model)
 
         # Verify the flow:
-        # msg 0: assistant with search_tools call
-        # msg 1: tool result from search_tools
+        # msg 0: assistant with search-tools call
+        # msg 1: tool result from search-tools
         # msg 2: assistant with weather_get_forecast call
         # msg 3: tool result from weather_get_forecast
         # msg 4: final assistant message
         assert len(response) == 5
         assert response[0].tool_calls is not None
-        assert response[0].tool_calls[0].function.name == "search_tools"
+        assert response[0].tool_calls[0].function.name == "search-tools"
         assert "Found" in response[1].content
         assert response[2].tool_calls is not None
         assert response[2].tool_calls[0].function.name == "weather_get_forecast"
@@ -491,12 +490,12 @@ class TestDiscoverAndUseFlow:
         second_call_tool_names = {t.name for t in second_call_tools}
         assert "weather_get_forecast" in second_call_tool_names
         assert "math_add" in second_call_tool_names
-        assert "search_tools" in second_call_tool_names
+        assert "search-tools" in second_call_tool_names
 
     async def test_multiple_search_calls_expand_tool_set(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """Multiple search_tools calls should progressively expand the loaded set."""
+        """Multiple search-tools calls should progressively expand the loaded set."""
         weather_tool = _make_tool("weather_get_forecast", "Get weather forecast")
         weather_current = _make_tool("weather_get_current", "Get current conditions")
         all_tools = [weather_tool, weather_current]
@@ -514,7 +513,7 @@ class TestDiscoverAndUseFlow:
         search_call_1 = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "forecast"}',
             ),
         )
@@ -522,7 +521,7 @@ class TestDiscoverAndUseFlow:
         search_call_2 = AssistantToolCall(
             id="call_s2",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "current conditions"}',
             ),
         )
@@ -557,14 +556,14 @@ class TestDiscoverAndUseFlow:
         assert "weather_get_forecast" in third_tool_names
         assert "weather_get_current" in third_tool_names
 
-        # Stats should show 2 search_tools calls
+        # Stats should show 2 search-tools calls
         stats = chat.get_stats()
         assert stats is not None
-        assert stats.tool_calls.by_tool.get("search_tools", 0) == 2
+        assert stats.tool_calls.by_tool.get("search-tools", 0) == 2
 
 
 class TestDeferredToolWithoutSearch:
-    """Tests for calling a deferred tool without using search_tools first."""
+    """Tests for calling a deferred tool without using search-tools first."""
 
     @pytest.fixture
     def mock_client(self) -> AsyncMock:
@@ -607,7 +606,7 @@ class TestDeferredToolWithoutSearch:
         mock_model.chat = AsyncMock(
             side_effect=[
                 AssistantMessage(content="", tool_calls=[direct_call]),
-                AssistantMessage(content="I'll use search_tools first."),
+                AssistantMessage(content="I'll use search-tools first."),
             ]
         )
 
@@ -625,7 +624,7 @@ class TestDeferredToolWithoutSearch:
         # The tool result should be an error
         tool_result = response[1]
         assert "not yet loaded" in tool_result.content
-        assert "search_tools" in tool_result.content
+        assert "search-tools" in tool_result.content
         assert tool_result.name == "weather_get_forecast"
 
         # MCP client should NOT have been called
@@ -649,9 +648,7 @@ class TestDeferredToolWithoutSearch:
 
         call = AssistantToolCall(
             id="call_1",
-            function=AssistantToolCallFunction(
-                name="weather_get", arguments="{}"
-            ),
+            function=AssistantToolCallFunction(name="weather_get", arguments="{}"),
         )
 
         mock_model.chat = AsyncMock(
@@ -700,7 +697,7 @@ class TestToolCacheVersionChange:
         2. LLM searches for weather_get -> it becomes loaded
         3. Version bumps (new tool weather_alert appears)
         4. LLM makes another call -> rebuild happens
-        5. Verify: math_add + weather_get (kept from prior discovery) + search_tools
+        5. Verify: math_add + weather_get (kept from prior discovery) + search-tools
            present, weather_alert still deferred
         """
         weather_tool = _make_tool("weather_get", "Get weather")
@@ -734,7 +731,7 @@ class TestToolCacheVersionChange:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"tool_names": ["weather_get"]}',
             ),
         )
@@ -744,7 +741,7 @@ class TestToolCacheVersionChange:
         async def model_chat_with_version_bump(**kwargs: Any) -> AssistantMessage:
             call_count[0] += 1
             if call_count[0] == 1:
-                # First call: LLM calls search_tools to load weather_get
+                # First call: LLM calls search-tools to load weather_get
                 return AssistantMessage(content="", tool_calls=[search_call])
             elif call_count[0] == 2:
                 # Second call: after search result returned
@@ -757,7 +754,7 @@ class TestToolCacheVersionChange:
                         AssistantToolCall(
                             id="call_s2",
                             function=AssistantToolCallFunction(
-                                name="search_tools",
+                                name="search-tools",
                                 arguments='{"query": "alert"}',
                             ),
                         )
@@ -780,43 +777,43 @@ class TestToolCacheVersionChange:
         response = await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # Verify the flow produced expected messages:
-        # msg 0: assistant with search_tools call
-        # msg 1: tool result from search_tools (Found weather_get)
-        # msg 2: assistant with second search_tools call (version bumped here)
-        # msg 3: tool result from second search_tools (Found weather_alert)
+        # msg 0: assistant with search-tools call
+        # msg 1: tool result from search-tools (Found weather_get)
+        # msg 2: assistant with second search-tools call (version bumped here)
+        # msg 3: tool result from second search-tools (Found weather_alert)
         # msg 4: final assistant message
         assert len(response) == 5
 
         # After version change rebuild, the third model.chat call should include:
         # - math_add (always loaded)
         # - weather_get (previously discovered, kept across rebuild)
-        # - search_tools (weather_alert is still deferred)
+        # - search-tools (weather_alert is still deferred)
         # - weather_alert should NOT be in tool list (still deferred)
         third_call_tools = mock_model.chat.call_args_list[2][1]["tools"]
         third_call_names = {t.name for t in third_call_tools}
         assert "math_add" in third_call_names, "Eagerly loaded tool should survive rebuild"
-        assert "weather_get" in third_call_names, (
-            "Previously discovered tool should be preserved across rebuild"
-        )
-        assert "search_tools" in third_call_names, (
-            "search_tools should be re-injected when new deferred tools exist"
-        )
+        assert (
+            "weather_get" in third_call_names
+        ), "Previously discovered tool should be preserved across rebuild"
+        assert (
+            "search-tools" in third_call_names
+        ), "search-tools should be re-injected when new deferred tools exist"
 
     async def test_version_change_removes_search_tools_when_no_deferred_remain(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """After version change, if no deferred tools remain, search_tools is removed."""
+        """After version change, if no deferred tools remain, search-tools is removed."""
         weather_tool = _make_tool("weather_get", "Get weather")
 
         # Initial: weather deferred. After version bump: same tools but server
         # no longer defers (simulated via empty deferred partition).
         initial_tools = [weather_tool]
         # The rebuild re-fetches and re-partitions. If the server config
-        # no longer defers, all tools go to loaded and search_tools is removed.
+        # no longer defers, all tools go to loaded and search-tools is removed.
         # We simulate this by having the config NOT defer on rebuild.
         # Since we can't change config mid-call, we instead just ensure that
         # after loading weather_get via search, a rebuild with the same tools
-        # keeps weather_get loaded but re-creates search_tools only if needed.
+        # keeps weather_get loaded but re-creates search-tools only if needed.
 
         version_counter = [1]
         tool_cache = Mock()
@@ -836,7 +833,7 @@ class TestToolCacheVersionChange:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"tool_names": ["weather_get"]}',
             ),
         )
@@ -868,12 +865,12 @@ class TestToolCacheVersionChange:
 
         # After search, weather_get was loaded. On rebuild with same tools,
         # weather_get is now in previously_loaded_names and will be kept in loaded.
-        # Since it was the only deferred tool, no deferred remain -> search_tools removed.
-        # The second call (call_count=2) should show weather_get but no search_tools
+        # Since it was the only deferred tool, no deferred remain -> search-tools removed.
+        # The second call (call_count=2) should show weather_get but no search-tools
         second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
         second_call_names = {t.name for t in second_call_tools}
         assert "weather_get" in second_call_names
-        assert "search_tools" in second_call_names  # Still present before rebuild
+        assert "search-tools" in second_call_names  # Still present before rebuild
 
 
 class TestToolsetFilteringWithDiscovery:
@@ -931,8 +928,8 @@ class TestToolsetFilteringWithDiscovery:
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
         assert "math_add" in tool_names
-        # search_tools should NOT be present (no deferred tools after filtering)
-        assert "search_tools" not in tool_names
+        # search-tools should NOT be present (no deferred tools after filtering)
+        assert "search-tools" not in tool_names
         # weather_get should not be present
         assert "weather_get" not in tool_names
 
@@ -956,7 +953,7 @@ class TestStatsTrackingWithDiscovery:
     async def test_search_tools_tracked_under_synthetic(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """search_tools calls should be tracked under _synthetic server."""
+        """search-tools calls should be tracked under _synthetic server."""
         weather_tool = _make_tool("weather_get", "Get weather")
 
         tool_cache = Mock()
@@ -971,7 +968,7 @@ class TestStatsTrackingWithDiscovery:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "weather"}',
             ),
         )
@@ -995,13 +992,13 @@ class TestStatsTrackingWithDiscovery:
 
         stats = chat.get_stats()
         assert stats is not None
-        assert stats.tool_calls.by_tool.get("search_tools") == 1
+        assert stats.tool_calls.by_tool.get("search-tools") == 1
         assert stats.tool_calls.by_server.get("_synthetic") == 1
 
     async def test_discovered_tool_stats_tracked_correctly(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """Tools discovered via search_tools should track stats under their actual server."""
+        """Tools discovered via search-tools should track stats under their actual server."""
         weather_tool = _make_tool("weather_get", "Get weather")
 
         tool_cache = Mock()
@@ -1017,7 +1014,7 @@ class TestStatsTrackingWithDiscovery:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"tool_names": ["weather_get"]}',
             ),
         )
@@ -1058,7 +1055,7 @@ class TestStatsTrackingWithDiscovery:
 
         stats = chat.get_stats()
         assert stats is not None
-        assert stats.tool_calls.by_tool.get("search_tools") == 1
+        assert stats.tool_calls.by_tool.get("search-tools") == 1
         assert stats.tool_calls.by_tool.get("weather_get") == 1
         assert stats.tool_calls.by_server.get("_synthetic") == 1
         assert stats.tool_calls.by_server.get("weather") == 1
@@ -1080,9 +1077,7 @@ class TestStatsTrackingWithDiscovery:
 
         direct_call = AssistantToolCall(
             id="call_1",
-            function=AssistantToolCallFunction(
-                name="weather_get", arguments="{}"
-            ),
+            function=AssistantToolCallFunction(name="weather_get", arguments="{}"),
         )
 
         mock_model.chat = AsyncMock(
@@ -1128,7 +1123,7 @@ class TestDeferAllMode:
     async def test_defer_all_defers_everything(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """defer_all=True should defer all tools, only search_tools available."""
+        """defer_all=True should defer all tools, only search-tools available."""
         math_tool = _make_tool("math_add", "Add numbers")
         weather_tool = _make_tool("weather_get", "Get weather")
 
@@ -1156,10 +1151,10 @@ class TestDeferAllMode:
         chat._tool_discovery_config = config.tool_discovery
         await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
-        # Only search_tools should be in the tool list
+        # Only search-tools should be in the tool list
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" in tool_names
+        assert "search-tools" in tool_names
         assert "math_add" not in tool_names
         assert "weather_get" not in tool_names
 
@@ -1205,16 +1200,16 @@ class TestEdgeCases:
         chat._tool_discovery_config = config.tool_discovery
         response = await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
-        # No tools available at all -> no search_tools injected
+        # No tools available at all -> no search-tools injected
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" not in tool_names
+        assert "search-tools" not in tool_names
         assert len(response) == 1
 
     async def test_search_returns_no_results(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """search_tools returning no results should not crash or expand tools."""
+        """search-tools returning no results should not crash or expand tools."""
         weather_tool = _make_tool("weather_get", "Get weather forecast")
 
         tool_cache = Mock()
@@ -1230,7 +1225,7 @@ class TestEdgeCases:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "zzz_nonexistent_zzz"}',
             ),
         )
@@ -1260,12 +1255,12 @@ class TestEdgeCases:
         second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
         second_call_names = {t.name for t in second_call_tools}
         assert "weather_get" not in second_call_names
-        assert "search_tools" in second_call_names
+        assert "search-tools" in second_call_names
 
     async def test_static_synthetic_tools_coexist_with_search_tools(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """Static synthetic tools should coexist with search_tools in the registry."""
+        """Static synthetic tools should coexist with search-tools in the registry."""
         weather_tool = _make_tool("weather_get", "Get weather")
 
         tool_cache = Mock()
@@ -1302,17 +1297,17 @@ class TestEdgeCases:
         chat._tool_discovery_config = config.tool_discovery
         await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
-        # Both search_tools and my_custom_tool should be available
+        # Both search-tools and my_custom_tool should be available
         call_kwargs = mock_model.chat.call_args[1]
         tool_names = {t.name for t in call_kwargs["tools"]}
-        assert "search_tools" in tool_names
+        assert "search-tools" in tool_names
         assert "my_custom_tool" in tool_names
         assert "weather_get" not in tool_names  # deferred
 
     async def test_deferred_tool_becomes_usable_after_discovery(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """A deferred tool that was initially blocked should work after search_tools loads it."""
+        """A deferred tool that was initially blocked should work after search-tools loads it."""
         weather_tool = _make_tool("weather_get", "Get weather forecast")
 
         tool_cache = Mock()
@@ -1327,24 +1322,20 @@ class TestEdgeCases:
         # Step 1: LLM tries to call weather_get directly (should get error)
         direct_call = AssistantToolCall(
             id="call_1",
-            function=AssistantToolCallFunction(
-                name="weather_get", arguments="{}"
-            ),
+            function=AssistantToolCallFunction(name="weather_get", arguments="{}"),
         )
         # Step 2: LLM searches for weather_get
         search_call = AssistantToolCall(
             id="call_2",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"tool_names": ["weather_get"]}',
             ),
         )
         # Step 3: LLM calls weather_get again (should succeed now)
         retry_call = AssistantToolCall(
             id="call_3",
-            function=AssistantToolCallFunction(
-                name="weather_get", arguments="{}"
-            ),
+            function=AssistantToolCallFunction(name="weather_get", arguments="{}"),
         )
 
         class MockContent:
@@ -1376,8 +1367,8 @@ class TestEdgeCases:
 
         # msg 0: assistant tries direct call
         # msg 1: error result (not yet loaded)
-        # msg 2: assistant calls search_tools
-        # msg 3: search_tools result (Found 1 tool)
+        # msg 2: assistant calls search-tools
+        # msg 3: search-tools result (Found 1 tool)
         # msg 4: assistant retries weather_get
         # msg 5: successful tool result
         # msg 6: final answer
@@ -1406,7 +1397,7 @@ class TestEdgeCases:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "weather"}',
             ),
         )

@@ -18,7 +18,6 @@ from casual_mcp.search_tools_tool import (
 from casual_mcp.synthetic_tool import SyntheticToolResult
 from casual_mcp.tool_search_index import ToolSearchIndex
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -356,12 +355,12 @@ class TestSearchToolsToolProtocol:
     """Tests for SyntheticTool protocol conformance."""
 
     def test_name_property(self, search_tool: SearchToolsTool) -> None:
-        assert search_tool.name == "search_tools"
+        assert search_tool.name == "search-tools"
 
     def test_definition_returns_tool(self, search_tool: SearchToolsTool) -> None:
         defn = search_tool.definition
         assert isinstance(defn, Tool)
-        assert defn.name == "search_tools"
+        assert defn.name == "search-tools"
 
     def test_definition_has_query_param(self, search_tool: SearchToolsTool) -> None:
         defn = search_tool.definition
@@ -478,9 +477,7 @@ class TestExecuteToolNamesOnly:
         assert result.newly_loaded_tools[0].name == "math_add"
 
     async def test_exact_lookup_multiple(self, search_tool: SearchToolsTool) -> None:
-        result = await search_tool.execute(
-            {"tool_names": ["math_add", "weather_get_forecast"]}
-        )
+        result = await search_tool.execute({"tool_names": ["math_add", "weather_get_forecast"]})
         assert len(result.newly_loaded_tools) == 2
         names = {t.name for t in result.newly_loaded_tools}
         assert names == {"math_add", "weather_get_forecast"}
@@ -492,9 +489,7 @@ class TestExecuteToolNamesOnly:
 
     async def test_partial_found(self, search_tool: SearchToolsTool) -> None:
         """Some names found, some not."""
-        result = await search_tool.execute(
-            {"tool_names": ["math_add", "nonexistent_tool"]}
-        )
+        result = await search_tool.execute({"tool_names": ["math_add", "nonexistent_tool"]})
         assert len(result.newly_loaded_tools) == 1
         assert "Not found: nonexistent_tool" in result.content
 
@@ -514,17 +509,13 @@ class TestExecuteServerNamePlusQuery:
     """Tests for execute() with server_name + query."""
 
     async def test_scoped_search(self, search_tool: SearchToolsTool) -> None:
-        result = await search_tool.execute(
-            {"server_name": "weather", "query": "forecast"}
-        )
+        result = await search_tool.execute({"server_name": "weather", "query": "forecast"})
         assert len(result.newly_loaded_tools) >= 1
         for tool in result.newly_loaded_tools:
             assert "weather" in tool.name
 
     async def test_scoped_search_no_match(self, search_tool: SearchToolsTool) -> None:
-        result = await search_tool.execute(
-            {"server_name": "math", "query": "forecast"}
-        )
+        result = await search_tool.execute({"server_name": "math", "query": "forecast"})
         assert "No tools found" in result.content
         assert result.newly_loaded_tools == []
 
@@ -538,9 +529,7 @@ class TestExecuteServerNamePlusToolNames:
     """Tests for execute() with server_name + tool_names."""
 
     async def test_scoped_exact_lookup(self, search_tool: SearchToolsTool) -> None:
-        result = await search_tool.execute(
-            {"server_name": "math", "tool_names": ["math_add"]}
-        )
+        result = await search_tool.execute({"server_name": "math", "tool_names": ["math_add"]})
         assert len(result.newly_loaded_tools) == 1
         assert result.newly_loaded_tools[0].name == "math_add"
 
@@ -565,9 +554,7 @@ class TestExecuteQueryPlusToolNames:
     """Tests for execute() with query + tool_names (tool_names takes precedence)."""
 
     async def test_tool_names_takes_precedence(self, search_tool: SearchToolsTool) -> None:
-        result = await search_tool.execute(
-            {"query": "weather", "tool_names": ["math_add"]}
-        )
+        result = await search_tool.execute({"query": "weather", "tool_names": ["math_add"]})
         assert len(result.newly_loaded_tools) == 1
         assert result.newly_loaded_tools[0].name == "math_add"
 
@@ -607,9 +594,7 @@ class TestExecuteNoParams:
 class TestExecuteAlreadyLoaded:
     """Tests for handling already-loaded tools."""
 
-    async def test_second_search_shows_already_loaded(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_second_search_shows_already_loaded(self, search_tool: SearchToolsTool) -> None:
         """First call loads tools; second call reports them as already loaded."""
         result1 = await search_tool.execute({"tool_names": ["math_add"]})
         assert len(result1.newly_loaded_tools) == 1
@@ -618,16 +603,12 @@ class TestExecuteAlreadyLoaded:
         assert len(result2.newly_loaded_tools) == 0
         assert "Already loaded: math_add" in result2.content
 
-    async def test_mixed_new_and_already_loaded(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_mixed_new_and_already_loaded(self, search_tool: SearchToolsTool) -> None:
         # Load math_add first
         await search_tool.execute({"tool_names": ["math_add"]})
 
         # Now request both math_add (already loaded) and math_multiply (new)
-        result = await search_tool.execute(
-            {"tool_names": ["math_add", "math_multiply"]}
-        )
+        result = await search_tool.execute({"tool_names": ["math_add", "math_multiply"]})
         assert len(result.newly_loaded_tools) == 1
         assert result.newly_loaded_tools[0].name == "math_multiply"
         assert "Already loaded: math_add" in result.content
@@ -701,16 +682,12 @@ class TestExecuteResultFormat:
 class TestNewlyLoadedTools:
     """Tests for newly_loaded_tools in SyntheticToolResult."""
 
-    async def test_newly_loaded_contains_mcp_tools(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_newly_loaded_contains_mcp_tools(self, search_tool: SearchToolsTool) -> None:
         result = await search_tool.execute({"server_name": "math"})
         for tool in result.newly_loaded_tools:
             assert isinstance(tool, mcp.Tool)
 
-    async def test_newly_loaded_excludes_already_loaded(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_newly_loaded_excludes_already_loaded(self, search_tool: SearchToolsTool) -> None:
         """Already-loaded tools should NOT appear in newly_loaded_tools."""
         await search_tool.execute({"tool_names": ["math_add"]})
         result = await search_tool.execute({"server_name": "math"})
@@ -718,17 +695,13 @@ class TestNewlyLoadedTools:
         assert "math_add" not in names
         assert "math_multiply" in names
 
-    async def test_deferred_set_shrinks_after_load(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_deferred_set_shrinks_after_load(self, search_tool: SearchToolsTool) -> None:
         assert "math_add" in search_tool._deferred_tools
         await search_tool.execute({"tool_names": ["math_add"]})
         assert "math_add" not in search_tool._deferred_tools
         assert "math_add" in search_tool._loaded_tools
 
-    async def test_query_search_newly_loaded(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_query_search_newly_loaded(self, search_tool: SearchToolsTool) -> None:
         """BM25 search should also move tools from deferred to loaded."""
         result = await search_tool.execute({"query": "add numbers"})
         # The results should include math_add
@@ -752,7 +725,7 @@ class TestEdgeCases:
         idx = ToolSearchIndex([], {})
         cfg = ToolDiscoveryConfig(enabled=True, max_search_results=5)
         st = SearchToolsTool({}, [], idx, cfg)
-        assert st.name == "search_tools"
+        assert st.name == "search-tools"
         defn = st.definition
         assert isinstance(defn, Tool)
 
@@ -809,17 +782,13 @@ class TestEdgeCases:
 
     async def test_duplicate_tool_names_handled(self, search_tool: SearchToolsTool) -> None:
         """Duplicate entries in tool_names should not cause errors."""
-        result = await search_tool.execute(
-            {"tool_names": ["math_add", "math_add"]}
-        )
+        result = await search_tool.execute({"tool_names": ["math_add", "math_add"]})
         # First occurrence is newly loaded, second is already loaded
         assert len(result.newly_loaded_tools) == 1
         assert result.newly_loaded_tools[0].name == "math_add"
         assert "Already loaded: math_add" in result.content
 
-    async def test_empty_server_name_treated_as_invalid(
-        self, search_tool: SearchToolsTool
-    ) -> None:
+    async def test_empty_server_name_treated_as_invalid(self, search_tool: SearchToolsTool) -> None:
         """Empty string server_name should produce an unknown server error."""
         result = await search_tool.execute({"server_name": ""})
         assert "Error: Unknown server" in result.content

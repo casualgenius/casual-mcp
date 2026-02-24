@@ -29,7 +29,6 @@ from casual_mcp.models.config import Config, McpClientConfig, McpModelConfig
 from casual_mcp.models.mcp_server_config import StdioServerConfig
 from casual_mcp.models.tool_discovery_config import ToolDiscoveryConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -149,9 +148,7 @@ class TestGetChatPassesConfig:
             discovery=ToolDiscoveryConfig(enabled=True, max_search_results=10),
         )
 
-    async def test_get_chat_passes_config(
-        self, config_with_discovery: Config
-    ) -> None:
+    async def test_get_chat_passes_config(self, config_with_discovery: Config) -> None:
         """McpToolChat should receive config when created via get_chat."""
         # Rather than importing main.py (which has module-level side effects),
         # we test the pattern used in get_chat directly.
@@ -333,7 +330,7 @@ class TestDiscoveryStatsInChat:
     async def test_discovery_stats_track_search_calls(
         self, mock_client: AsyncMock, mock_model: AsyncMock
     ) -> None:
-        """Discovery stats should count search_tools invocations."""
+        """Discovery stats should count search-tools invocations."""
         weather_tool = _make_tool("weather_get", "Get weather forecast")
 
         tool_cache = Mock()
@@ -349,7 +346,7 @@ class TestDiscoveryStatsInChat:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "weather"}',
             ),
         )
@@ -398,7 +395,7 @@ class TestDiscoveryStatsInChat:
         search_call_1 = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "forecast"}',
             ),
         )
@@ -406,7 +403,7 @@ class TestDiscoveryStatsInChat:
         search_call_2 = AssistantToolCall(
             id="call_s2",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "current"}',
             ),
         )
@@ -455,7 +452,7 @@ class TestDiscoveryStatsInChat:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"query": "zzz_nonexistent_zzz"}',
             ),
         )
@@ -501,7 +498,7 @@ class TestDiscoveryStatsInChat:
         search_call = AssistantToolCall(
             id="call_s1",
             function=AssistantToolCallFunction(
-                name="search_tools",
+                name="search-tools",
                 arguments='{"tool_names": ["weather_get"]}',
             ),
         )
@@ -559,9 +556,7 @@ class TestCLIToolsCommand:
         with (
             patch("casual_mcp.cli.load_config", return_value=config),
             patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
-            patch(
-                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
-            ),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=tool_list),
             patch("casual_mcp.cli.console") as mock_console,
         ):
             tools_command()
@@ -593,9 +588,7 @@ class TestCLIToolsCommand:
         with (
             patch("casual_mcp.cli.load_config", return_value=config),
             patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
-            patch(
-                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
-            ),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=tool_list),
             patch("casual_mcp.cli.console") as mock_console,
         ):
             tools_command()
@@ -628,9 +621,7 @@ class TestCLIToolsCommand:
         with (
             patch("casual_mcp.cli.load_config", return_value=config),
             patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
-            patch(
-                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
-            ),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=tool_list),
             patch("casual_mcp.cli.console") as mock_console,
         ):
             tools_command()
@@ -676,9 +667,7 @@ class TestCLIToolsCommand:
         with (
             patch("casual_mcp.cli.load_config", return_value=config),
             patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
-            patch(
-                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
-            ),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=tool_list),
             patch("casual_mcp.cli.console") as mock_console,
         ):
             tools_command()
@@ -702,9 +691,7 @@ class TestCLIToolsCommand:
         with (
             patch("casual_mcp.cli.load_config", return_value=config),
             patch("casual_mcp.cli.load_mcp_client", return_value=Mock()),
-            patch(
-                "casual_mcp.cli.run_async_with_cleanup", return_value=tool_list
-            ),
+            patch("casual_mcp.cli.run_async_with_cleanup", return_value=tool_list),
             patch("casual_mcp.cli.console") as mock_console,
         ):
             tools_command()

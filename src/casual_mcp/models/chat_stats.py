@@ -51,12 +51,12 @@ class DiscoveryStats(BaseModel):
     tools_discovered: int = Field(
         default=0,
         ge=0,
-        description="Number of tools discovered (loaded) via search_tools",
+        description="Number of tools discovered (loaded) via search-tools",
     )
     search_calls: int = Field(
         default=0,
         ge=0,
-        description="Number of search_tools invocations",
+        description="Number of search-tools invocations",
     )
 
 

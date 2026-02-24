@@ -20,7 +20,7 @@ class StdioServerConfig(BaseModel):
         cwd: Working directory for the server process.
         transport: Always ``"stdio"`` for this server type.
         defer_loading: When True and tool discovery is enabled, tools
-            from this server are deferred and discoverable via search_tools.
+            from this server are deferred and discoverable via search-tools.
     """
 
     command: str
@@ -40,7 +40,7 @@ class RemoteServerConfig(BaseModel):
         transport: Transport protocol (``"streamable-http"``, ``"sse"``,
             or ``"http"``). Auto-detected if not specified.
         defer_loading: When True and tool discovery is enabled, tools
-            from this server are deferred and discoverable via search_tools.
+            from this server are deferred and discoverable via search-tools.
     """
 
     url: str
