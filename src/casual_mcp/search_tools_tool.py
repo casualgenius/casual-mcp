@@ -220,7 +220,7 @@ class SearchToolsTool:
                     "query": {
                         "type": "string",
                         "description": (
-                            "Keyword search query to find relevant tools" " by name or description."
+                            "Keyword search query to find relevant tools by name or description."
                         ),
                     },
                     "server_name": {
@@ -277,7 +277,7 @@ class SearchToolsTool:
         if server_name is not None and server_name not in self._server_names:
             valid = ", ".join(sorted(self._server_names))
             return SyntheticToolResult(
-                content=(f"Error: Unknown server '{server_name}'. " f"Valid servers: {valid}."),
+                content=(f"Error: Unknown server '{server_name}'. Valid servers: {valid}."),
                 newly_loaded_tools=[],
             )
 
@@ -356,8 +356,7 @@ class SearchToolsTool:
         content = "".join(text_parts)
 
         logger.debug(
-            f"search-tools: {len(newly_loaded)} newly loaded, "
-            f"{len(already_loaded)} already loaded"
+            f"search-tools: {len(newly_loaded)} newly loaded, {len(already_loaded)} already loaded"
         )
 
         return SyntheticToolResult(

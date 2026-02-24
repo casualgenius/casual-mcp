@@ -163,6 +163,23 @@ response = await chat.chat(messages, model="gpt-4.1")
 
 For full control you can still construct `McpToolChat` manually — see the [Programmatic Usage Guide](docs/programmatic-usage.md) for details on `from_config()`, model selection at call time, usage statistics, toolsets, and common patterns.
 
+## Examples
+
+The [examples/](examples/) directory contains runnable scripts organised by feature:
+
+- **[tool_calling](examples/tool_calling/)** -- basic tool-calling with `McpToolChat`, including manual construction
+- **[tool_discovery](examples/tool_discovery/)** -- deferred tool loading with the `search-tools` meta-tool
+- **[tool_sets](examples/tool_sets/)** -- restricting available tools per request with toolsets
+
+Each subfolder has its own `config.json`. To run an example:
+
+```bash
+cd examples/tool_calling
+uv run python chat_weather.py
+```
+
+See the [examples README](examples/README.md) for full details.
+
 ## Architecture
 
 Casual MCP orchestrates LLMs and MCP tool servers in a recursive loop:

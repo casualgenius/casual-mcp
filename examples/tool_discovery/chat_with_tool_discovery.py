@@ -45,11 +45,11 @@ from casual_mcp.tool_discovery import partition_tools
 load_dotenv()
 configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5-nano")
 
 
 async def main():
-    config = load_config("casual_mcp_config.json")
+    config = load_config("config.json")
 
     if MODEL_NAME not in config.models:
         print(f"Model '{MODEL_NAME}' not found in config. Available models:")
@@ -85,7 +85,7 @@ async def main():
         return
 
     # The LLM will automatically use search-tools to find deferred tools
-    prompt = "What's the weather in Paris?"
+    prompt = "What's the weather in Paris tomorrow?"
     print(f"\nUser: {prompt}")
     print("(The LLM should call search-tools to find weather tools, then use them)\n")
 
@@ -107,7 +107,7 @@ async def main():
     # Show discovery stats
     stats = chat.get_stats()
     if stats:
-        print(f"\nStats: {stats.llm_calls} LLM calls, " f"{stats.tool_calls.total} tool calls")
+        print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
         if stats.discovery:
             print(
                 f"Discovery: {stats.discovery.search_calls} search calls, "

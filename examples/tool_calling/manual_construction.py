@@ -28,7 +28,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
 
 async def main():
-    config = load_config("casual_mcp_config.json")
+    config = load_config("config.json")
 
     if MODEL_NAME not in config.models:
         print(f"Model '{MODEL_NAME}' not found in config. Available models:")
@@ -87,7 +87,7 @@ async def main():
     # Show stats
     stats = chat.get_stats()
     if stats:
-        print(f"\nStats: {stats.tool_calls.total} tool calls, " f"{stats.llm_calls} LLM calls")
+        print(f"\nStats: {stats.tool_calls.total} tool calls, {stats.llm_calls} LLM calls")
 
     # Clean up MCP client connections
     await mcp_client.close()

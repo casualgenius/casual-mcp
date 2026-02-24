@@ -278,7 +278,7 @@ class McpToolChat:
                 )
             else:
                 logger.debug(
-                    "Tool discovery enabled but no deferred tools - " "search-tools not injected"
+                    "Tool discovery enabled but no deferred tools - search-tools not injected"
                 )
 
         # Add a system message if required
@@ -298,12 +298,14 @@ class McpToolChat:
             if self._is_discovery_enabled() and self.tool_cache.version != current_cache_version:
                 logger.info("Tool cache version changed mid-session, rebuilding discovery index")
                 current_cache_version = self.tool_cache.version
-                loaded_tools, deferred_tool_names, call_synthetic_registry = (
-                    await self._rebuild_discovery_state(
-                        tool_set=tool_set,
-                        loaded_tools=loaded_tools,
-                        base_synthetic_registry=self._synthetic_registry,
-                    )
+                (
+                    loaded_tools,
+                    deferred_tool_names,
+                    call_synthetic_registry,
+                ) = await self._rebuild_discovery_state(
+                    tool_set=tool_set,
+                    loaded_tools=loaded_tools,
+                    base_synthetic_registry=self._synthetic_registry,
                 )
                 synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
 
@@ -376,8 +378,7 @@ class McpToolChat:
                                 st.definition for st in call_synthetic_registry.values()
                             ]
                             logger.info(
-                                f"Expanded loaded tools by {len(newly_loaded)} "
-                                f"from search-tools"
+                                f"Expanded loaded tools by {len(newly_loaded)} from search-tools"
                             )
                     else:
                         result = await self.execute(tool_call, meta=meta)
@@ -477,8 +478,7 @@ class McpToolChat:
             )
             new_call_registry[search_tools_tool.name] = search_tools_tool
             logger.info(
-                f"Rebuilt discovery: {len(new_loaded)} loaded, "
-                f"{len(new_deferred_names)} deferred"
+                f"Rebuilt discovery: {len(new_loaded)} loaded, {len(new_deferred_names)} deferred"
             )
 
         return new_loaded, new_deferred_names, new_call_registry

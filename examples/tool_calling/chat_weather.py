@@ -21,7 +21,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
 
 async def main():
-    config = load_config("casual_mcp_config.json")
+    config = load_config("config.json")
 
     if MODEL_NAME not in config.models:
         print(f"Model '{MODEL_NAME}' not found in config. Available models:")
