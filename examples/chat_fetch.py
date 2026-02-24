@@ -11,10 +11,8 @@ from dotenv import load_dotenv
 
 from casual_llm import UserMessage, SystemMessage
 
+from casual_mcp import McpToolChat, load_config
 from casual_mcp.logging import configure_logging
-from casual_mcp.mcp_tool_chat import McpToolChat
-from casual_mcp.model_factory import ModelFactory
-from casual_mcp.utils import load_config, load_mcp_client
 
 load_dotenv()
 configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))  # type: ignore
@@ -24,7 +22,6 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
 async def main():
     config = load_config("casual_mcp_config.json")
-    mcp_client = load_mcp_client(config)
 
     if MODEL_NAME not in config.models:
         print(f"Model '{MODEL_NAME}' not found in config. Available models:")
@@ -32,13 +29,7 @@ async def main():
             print(f"  - {name}")
         return
 
-    model_factory = ModelFactory(config)
-    llm_model = model_factory.get_model(MODEL_NAME)
-
-    chat = McpToolChat(
-        mcp_client=mcp_client,
-        model=llm_model,
-    )
+    chat = McpToolChat.from_config(config)
 
     # Build messages manually for full control
     messages = [
@@ -48,7 +39,7 @@ async def main():
         UserMessage(content="https://www.anthropic.com/news/model-context-protocol"),
     ]
 
-    response_messages = await chat.chat(messages)
+    response_messages = await chat.chat(messages, model=MODEL_NAME)
 
     print(f"Model: {MODEL_NAME}")
     print("\nSummarise https://www.anthropic.com/news/model-context-protocol\n")
@@ -61,7 +52,7 @@ async def main():
             break
 
     # Clean up MCP client connections
-    await mcp_client.close()
+    await chat.mcp_client.close()
 
 
 if __name__ == "__main__":

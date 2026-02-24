@@ -34,23 +34,12 @@ chat = McpToolChat.from_config(config, system="You are a helpful assistant.")
 
 # Select model at call time
 response = await chat.chat(messages, model="gpt-4.1")
-response = await chat.generate("What time is it?", model="gpt-4.1")
 
 # Override system prompt per call
 response = await chat.chat(messages, model="gpt-4.1", system="Be concise.")
 ```
 
-A single `McpToolChat` instance can serve multiple models — pass the model name to each `chat()` or `generate()` call.
-
-**Simple prompt-based interface:**
-
-```python
-# Basic prompt
-response = await chat.generate("What time is it in London?", model="gpt-4.1")
-
-# With session (for testing/dev only)
-response = await chat.generate("What time is it?", model="gpt-4.1", session_id="my-session")
-```
+A single `McpToolChat` instance can serve multiple models — pass the model name to each `chat()` call.
 
 **Full message control:**
 
@@ -113,7 +102,7 @@ mcp_client = load_mcp_client(config)
 
 ## Usage Statistics
 
-After calling `chat()` or `generate()`, retrieve usage statistics via `get_stats()`:
+After calling `chat()`, retrieve usage statistics via `get_stats()`:
 
 ```python
 response = await chat.chat(messages, model="gpt-4.1")
@@ -133,11 +122,11 @@ stats.tool_calls.total     # Total tool calls
 stats.llm_calls  # 1 = no tools, 2+ = tool loop iterations
 ```
 
-Stats reset at the start of each `chat()` or `generate()` call.
+Stats reset at the start of each `chat()` call.
 
 ## Response Structure
 
-`chat()` and `generate()` return a list of `ChatMessage` objects:
+`chat()` returns a list of `ChatMessage` objects:
 
 ```python
 response_messages = await chat.chat(messages, model="gpt-4.1")
@@ -176,9 +165,6 @@ toolset = ToolSetConfig(
 
 # Use with chat()
 response = await chat.chat(messages, model="gpt-4.1", tool_set=toolset)
-
-# Use with generate()
-response = await chat.generate("What time is it?", model="gpt-4.1", tool_set=toolset)
 ```
 
 ## Message Types
@@ -241,7 +227,7 @@ You have access to these tools:
 To use a tool, respond with JSON: {"tool": "tool_name", "args": {...}}
 ```
 
-When using `from_config()`, the template is resolved automatically when you pass the model name to `chat()`/`generate()`. An explicit `system` parameter always takes precedence over the template.
+When using `from_config()`, the template is resolved automatically when you pass the model name to `chat()`. An explicit `system` parameter always takes precedence over the template.
 
 ### Tool Result Formatting
 
@@ -253,16 +239,11 @@ export TOOL_RESULT_FORMAT=function_result     # "get_weather → 72°F"
 export TOOL_RESULT_FORMAT=function_args_result # "get_weather(location='London') → 15°C"
 ```
 
-### Session Management
+### Multi-Turn Conversations
 
-> **Note**: Sessions are for testing/development only. In production, manage your own message history.
+Manage your own message history for multi-turn conversations:
 
 ```python
-# Development/testing with sessions
-response = await chat.generate("What's the weather?", model="gpt-4.1", session_id="test-123")
-response = await chat.generate("How about tomorrow?", model="gpt-4.1", session_id="test-123")
-
-# Production: manage your own history
 messages = []
 messages.append(UserMessage(content="What's the weather?"))
 response_msgs = await chat.chat(messages, model="gpt-4.1")

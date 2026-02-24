@@ -9,7 +9,6 @@ from casual_llm import (
     Model,
     SystemMessage,
     ToolResultMessage,
-    UserMessage,
 )
 import mcp
 from fastmcp import Client
@@ -30,26 +29,9 @@ from casual_mcp.model_factory import ModelFactory
 from casual_mcp.utils import format_tool_call_result, load_mcp_client, render_system_prompt
 
 logger = get_logger("mcp_tool_chat")
-sessions: dict[str, list[ChatMessage]] = {}
 
 # Type alias for metadata dictionary
 MetaDict = dict[str, Any]
-
-
-def get_session_messages(session_id: str) -> list[ChatMessage]:
-    global sessions
-
-    if session_id not in sessions:
-        logger.info(f"Starting new session {session_id}")
-        sessions[session_id] = []
-    else:
-        logger.info(f"Retrieving session {session_id} of length {len(sessions[session_id])}")
-    return sessions[session_id].copy()
-
-
-def add_messages_to_session(session_id: str, messages: list[ChatMessage]) -> None:
-    global sessions
-    sessions[session_id].extend(messages.copy())
 
 
 class McpToolChat:
@@ -97,17 +79,12 @@ class McpToolChat:
         self._config: Config | None = None
         self._tool_discovery_config: ToolDiscoveryConfig | None = None
 
-    @staticmethod
-    def get_session(session_id: str) -> list[ChatMessage] | None:
-        global sessions
-        return sessions.get(session_id)
-
     def get_stats(self) -> ChatStats | None:
         """
-        Get usage statistics from the last chat() or generate() call.
+        Get usage statistics from the last chat() call.
 
         Returns None if no calls have been made yet.
-        Stats are reset at the start of each new chat()/generate() call.
+        Stats are reset at the start of each new chat() call.
         """
         return self._last_stats
 
@@ -130,7 +107,7 @@ class McpToolChat:
 
         Internally builds the MCP client, tool cache, model factory, and
         server names from the configuration. Model selection is deferred
-        to ``chat()``/``generate()`` call time.
+        to ``chat()`` call time.
 
         Args:
             config: The application configuration.
@@ -170,7 +147,7 @@ class McpToolChat:
         """
         if model is None:
             raise ValueError(
-                "No model specified. Provide a model to chat()/generate()."
+                "No model specified. Provide a model to chat()."
             )
 
         if isinstance(model, Model):
@@ -192,7 +169,7 @@ class McpToolChat:
         """Resolve a system prompt for the current call.
 
         Resolution order:
-        1. Explicit *system* param passed to ``chat()``/``generate()``.
+        1. Explicit *system* param passed to ``chat()``.
         2. If *model_name* is provided and its config has a ``template``,
            render it using the current tool list.
         3. Fall back to ``self.system`` (the constructor default).
@@ -208,59 +185,6 @@ class McpToolChat:
                 return render_system_prompt(f"{model_config.template}.j2", tools)
 
         return self.system
-
-    async def generate(
-        self,
-        prompt: str,
-        session_id: str | None = None,
-        tool_set: ToolSetConfig | None = None,
-        meta: MetaDict | None = None,
-        model: str | Model | None = None,
-        system: str | None = None,
-    ) -> list[ChatMessage]:
-        """
-        Generate a response to a prompt, optionally using session history.
-
-        Args:
-            prompt: The user prompt to respond to
-            session_id: Optional session ID for conversation persistence
-            tool_set: Optional tool set configuration to filter available tools
-            meta: Optional metadata to pass through to MCP tool calls.
-                  Useful for passing context like character_id without
-                  exposing it to the LLM. Servers can access this via
-                  ctx.request_context.meta.
-            model: Optional model override — a ``Model`` instance or a string
-                name to resolve via the model factory.
-            system: Optional system prompt override for this call.
-
-        Returns:
-            List of response messages including any tool calls and results
-        """
-        # Fetch the session if we have a session ID
-        messages: list[ChatMessage]
-        if session_id:
-            messages = get_session_messages(session_id)
-        else:
-            messages = []
-
-        # Add the prompt as a user message
-        user_message = UserMessage(content=prompt)
-        messages.append(user_message)
-
-        # Add the user message to the session
-        if session_id:
-            add_messages_to_session(session_id, [user_message])
-
-        # Perform Chat
-        response = await self.chat(
-            messages=messages, tool_set=tool_set, meta=meta, model=model, system=system
-        )
-
-        # Add responses to session
-        if session_id:
-            add_messages_to_session(session_id, response)
-
-        return response
 
     async def chat(
         self,

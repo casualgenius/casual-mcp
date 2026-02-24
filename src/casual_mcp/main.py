@@ -39,15 +39,6 @@ chat_instance = McpToolChat.from_config(config, system=default_system_prompt)
 app = FastAPI()
 
 
-class GenerateRequest(BaseModel):
-    session_id: str | None = Field(default=None, title="Session to use")
-    model: str = Field(title="Model to use")
-    system_prompt: str | None = Field(default=None, title="System Prompt to use")
-    prompt: str = Field(title="User Prompt")
-    include_stats: bool = Field(default=False, title="Include usage statistics in response")
-    tool_set: str | None = Field(default=None, title="Name of toolset to use")
-
-
 class ChatRequest(BaseModel):
     model: str = Field(title="Model to use")
     system_prompt: str | None = Field(default=None, title="System Prompt to use")
@@ -110,47 +101,6 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
     if req.include_stats:
         result["stats"] = chat_instance.get_stats()
     return result
-
-
-@app.post("/generate")
-async def generate(req: GenerateRequest) -> dict[str, Any]:
-    tool_set_config = resolve_tool_set(req.tool_set)
-
-    try:
-        messages = await chat_instance.generate(
-            req.prompt,
-            req.session_id,
-            tool_set=tool_set_config,
-            model=req.model,
-            system=req.system_prompt,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except ToolSetValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if not messages:
-        error_result: dict[str, Any] = {"messages": [], "response": ""}
-        if req.include_stats:
-            error_result["stats"] = chat_instance.get_stats()
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "No response generated", **error_result},
-        )
-
-    result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
-    if req.include_stats:
-        result["stats"] = chat_instance.get_stats()
-    return result
-
-
-@app.get("/generate/session/{session_id}")
-async def get_generate_session(session_id: str) -> list[ChatMessage]:
-    session = McpToolChat.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return session
 
 
 @app.get("/toolsets")

@@ -50,14 +50,12 @@ casual-mcp tools                              # List available tools
 **`McpToolChat`** ([src/casual_mcp/mcp_tool_chat.py](src/casual_mcp/mcp_tool_chat.py))
 - Orchestrates LLM interaction with tools using a recursive loop
 - **`from_config(config)`** classmethod builds all dependencies from a `Config` object (recommended)
-- Model selection at call time: `chat(messages, model="gpt-4.1")` or `generate(prompt, model="gpt-4.1")`
+- Model selection at call time: `chat(messages, model="gpt-4.1")`
 - System prompt resolved per-call: explicit `system` param > model template > constructor default
 - Constructor takes `(mcp_client, system, tool_cache, server_names, synthetic_tools, model_factory)` — no `model` or `config`
 - Tool discovery and config are wired internally by `from_config()`; manual construction does not support discovery
-- Manages chat sessions (stored in-memory, for testing/development only)
-- Two main methods:
-  - `generate(prompt, session_id, model, system)` - Simple prompt-based interface with optional session
-  - `chat(messages, model, system)` - Takes full message list for more control
+- One main method:
+  - `chat(messages, model, system)` - Takes full message list, returns response messages
 - Executes tools via the MCP client and feeds results back to the LLM
 - Automatically converts MCP tools to casual-llm format via `convert_tools`
 
@@ -156,10 +154,7 @@ System prompts are Jinja2 templates in [prompt-templates/](prompt-templates/):
 
 The FastAPI application ([src/casual_mcp/main.py](src/casual_mcp/main.py)) provides:
 - `POST /chat` - Send full message history
-- `POST /generate` - Send a prompt with optional session management
-- `GET /generate/session/{session_id}` - Retrieve session messages
-
-Sessions are stored in-memory in `mcp_tool_chat.py` and are cleared on server restart. **Important**: Sessions are for testing/development only. Production applications should manage their own message history.
+- `GET /toolsets` - List available toolsets
 
 ## Environment Variables
 
@@ -220,15 +215,13 @@ prompt-templates/              # Jinja2 templates for system prompts
    - Add results to message history
    - Repeat until LLM provides final answer (no tool calls)
 
-6. **Session Management**: Sessions are dictionary-based in-memory storage keyed by session ID. **Use only for testing/dev** - production apps should manage their own message history.
+6. **Message Types from casual-llm**: All message types (`SystemMessage`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ChatMessage`) are imported from casual-llm and re-exported from `casual_mcp.models` for backwards compatibility.
 
-7. **Message Types from casual-llm**: All message types (`SystemMessage`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ChatMessage`) are imported from casual-llm and re-exported from `casual_mcp.models` for backwards compatibility.
+7. **Config Loading**: Use `load_config()` from `utils.py` to load configuration, then `McpToolChat.from_config(config)` to create a fully-wired instance. For manual setup, use `load_mcp_client()` from `utils.py`. Config is loaded from `casual_mcp_config.json`.
 
-8. **Config Loading**: Use `load_config()` from `utils.py` to load configuration, then `McpToolChat.from_config(config)` to create a fully-wired instance. For manual setup, use `load_mcp_client()` from `utils.py`. Config is loaded from `casual_mcp_config.json`.
+8. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search_tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
 
-9. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search_tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
-
-10. **Synthetic Tool Protocol**: Internal tools that are handled by casual-mcp itself (not forwarded to MCP servers). The `SyntheticTool` protocol defines the interface; `SearchToolsTool` is the primary implementation. Synthetic tools are dispatched in the chat loop before MCP tool execution.
+9. **Synthetic Tool Protocol**: Internal tools that are handled by casual-mcp itself (not forwarded to MCP servers). The `SyntheticTool` protocol defines the interface; `SearchToolsTool` is the primary implementation. Synthetic tools are dispatched in the chat loop before MCP tool execution.
 
 ## Tool Discovery
 

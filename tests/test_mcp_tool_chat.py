@@ -215,86 +215,6 @@ class TestMcpToolChat:
         assert len(response) == 1
         assert response[0].content == "Final response"
 
-    async def test_generate_creates_user_message(self, mock_client, mock_model, mock_tool_cache):
-        """Test that generate creates a UserMessage from prompt."""
-        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-
-        chat = McpToolChat(mock_client, "System", mock_tool_cache)
-
-        await chat.generate("Hello", model=mock_model)
-
-        # Should have called chat with UserMessage
-        call_args = mock_model.chat.call_args
-        messages = call_args[1]["messages"]
-
-        # Should have system + user message
-        user_messages = [m for m in messages if m.role == "user"]
-        assert len(user_messages) == 1
-        assert user_messages[0].content == "Hello"
-
-    async def test_generate_with_session_retrieves_messages(
-        self, mock_client, mock_model, mock_tool_cache
-    ):
-        """Test that generate with session_id retrieves session messages."""
-        from casual_mcp.mcp_tool_chat import sessions
-
-        sessions["test_session"] = [UserMessage(content="Previous message")]
-
-        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-
-        chat = McpToolChat(mock_client, "System", mock_tool_cache)
-
-        await chat.generate("New message", session_id="test_session", model=mock_model)
-
-        # Should have included previous message
-        call_args = mock_model.chat.call_args
-        messages = call_args[1]["messages"]
-
-        user_messages = [m for m in messages if m.role == "user"]
-        assert len(user_messages) == 2  # Previous + new
-
-        # Cleanup
-        sessions.clear()
-
-    async def test_generate_with_session_adds_responses(
-        self, mock_client, mock_model, mock_tool_cache
-    ):
-        """Test that generate with session adds responses to session."""
-        from casual_mcp.mcp_tool_chat import sessions
-
-        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Response"))
-
-        chat = McpToolChat(mock_client, "System", mock_tool_cache)
-
-        await chat.generate("Message", session_id="test_session", model=mock_model)
-
-        # Session should have user message and assistant response
-        assert len(sessions["test_session"]) == 2
-
-        # Cleanup
-        sessions.clear()
-
-    def test_get_session_returns_session(self, mock_client, mock_model, mock_tool_cache):
-        """Test that get_session returns the correct session."""
-        from casual_mcp.mcp_tool_chat import sessions
-
-        sessions["test"] = [UserMessage(content="Test")]
-
-        result = McpToolChat.get_session("test")
-
-        assert result is not None
-        assert len(result) == 1
-
-        # Cleanup
-        sessions.clear()
-
-    def test_get_session_returns_none_for_nonexistent(
-        self, mock_client, mock_model, mock_tool_cache
-    ):
-        """Test that get_session returns None for nonexistent session."""
-        result = McpToolChat.get_session("nonexistent")
-
-        assert result is None
 
 
 class TestMcpToolChatStats:
@@ -713,28 +633,6 @@ class TestMcpToolChatFromConfig:
 
         messages = [UserMessage(content="Hi")]
         response = await chat.chat(messages, model="gpt-4.1")
-
-        chat.model_factory.get_model.assert_called_once_with("gpt-4.1")
-        assert response[-1].content == "Hello"
-
-    async def test_generate_with_model_name_resolves_via_factory(self):
-        """generate() with a string model should resolve via the factory."""
-        config = _make_config()
-
-        with patch("casual_mcp.mcp_tool_chat.load_mcp_client"):
-            chat = McpToolChat.from_config(config)
-
-        mock_model = AsyncMock()
-        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
-        mock_model.get_usage = Mock(return_value=None)
-        chat.model_factory = Mock(spec=ModelFactory)
-        chat.model_factory.get_model.return_value = mock_model
-
-        chat.tool_cache = Mock()
-        chat.tool_cache.get_tools = AsyncMock(return_value=[])
-        chat.tool_cache.version = 1
-
-        response = await chat.generate("Hi", model="gpt-4.1")
 
         chat.model_factory.get_model.assert_called_once_with("gpt-4.1")
         assert response[-1].content == "Hello"

@@ -59,9 +59,9 @@ uv sync --group dev
 4. Make a request:
 
 ```bash
-curl -X POST http://localhost:8000/generate \
+curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4.1", "prompt": "What time is it?"}'
+  -d '{"model": "gpt-4.1", "messages": [{"role": "user", "content": "What time is it?"}]}'
 ```
 
 ## Configuration
@@ -141,8 +141,6 @@ See [CLI & API Reference](docs/cli-api.md) for all commands and options.
 | Endpoint | Description |
 |----------|-------------|
 | `POST /chat` | Send message history |
-| `POST /generate` | Send prompt with optional session |
-| `GET /generate/session/{id}` | Get session messages |
 | `GET /toolsets` | List available toolsets |
 
 See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response formats.
