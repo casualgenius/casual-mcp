@@ -62,12 +62,3 @@ dev = [
     "pytest-mock>=3.12.0",
     "ruff>=0.11.10",
 ]
-
-[tool.bumpversion]
-current_version = "1.0.0"
-commit = true
-tag = true
-
-[tool.bumpversion.file."pyproject.toml"]
-search = 'version = "{current_version}"'
-replace = 'version = "{new_version}"'

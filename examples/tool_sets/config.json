@@ -1,96 +1,84 @@
 {
-    "clients": {
-        "openai": {
-            "provider": "openai"
-        },
-        "ollama": {
-            "provider": "ollama",
-            "base_url": "http://localhost:11434"
-        }
+  "clients": {
+    "openai": {
+      "provider": "openai"
     },
-    "models": {
-        "ollama-llama3.1": {
-            "client": "ollama",
-            "model": "llama3.1:8b"
-        },
-        "ollama-qwen2.5-7b-instruct": {
-            "client": "ollama",
-            "model": "qwen2.5:7b-instruct"
-        },
-        "gpt-5-mini": {
-            "client": "openai",
-            "model": "gpt-5-mini"
-        },
-        "gpt-5-nano": {
-            "client": "openai",
-            "model": "gpt-5-nano"
-        },
-        "gpt-4.1-mini": {
-            "client": "openai",
-            "model": "gpt-4.1-mini"
-        },
-        "gpt-4.1-nano": {
-            "client": "openai",
-            "model": "gpt-4.1-nano"
-        }
-    },
-    "servers": {
-        "math": {
-            "command": "python",
-            "args": [
-                "../mcp-servers/math/server.py"
-            ]
-        },
-        "time": {
-            "command": "python",
-            "args": [
-                "../mcp-servers/time/server.py"
-            ]
-        },
-        "weather": {
-            "command": "python",
-            "args": [
-                "../mcp-servers/weather/server.py"
-            ]
-        },
-        "words": {
-            "command": "python",
-            "args": [
-                "../mcp-servers/words/server.py"
-            ]
-        },
-        "fetch": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@lmcc-dev/mult-fetch-mcp-server"
-            ],
-            "env": {
-                "MCP_LANG": "en"
-            }
-        }
-    },
-    "tool_sets": {
-        "basic": {
-            "description": "Basic tools for time and math",
-            "servers": {
-                "math": true,
-                "time": [
-                    "current_time"
-                ]
-            }
-        },
-        "research": {
-            "description": "Research tools for weather and words",
-            "servers": {
-                "weather": true,
-                "words": {
-                    "exclude": [
-                        "random_word"
-                    ]
-                },
-                "fetch": true
-            }
-        }
+    "ollama": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434"
     }
+  },
+  "models": {
+    "ollama-llama3.1": {
+      "client": "ollama",
+      "model": "llama3.1:8b"
+    },
+    "ollama-qwen2.5-7b-instruct": {
+      "client": "ollama",
+      "model": "qwen2.5:7b-instruct"
+    },
+    "gpt-5-mini": {
+      "client": "openai",
+      "model": "gpt-5-mini"
+    },
+    "gpt-5-nano": {
+      "client": "openai",
+      "model": "gpt-5-nano"
+    },
+    "gpt-4.1-mini": {
+      "client": "openai",
+      "model": "gpt-4.1-mini"
+    },
+    "gpt-4.1-nano": {
+      "client": "openai",
+      "model": "gpt-4.1-nano"
+    }
+  },
+  "servers": {
+    "math": {
+      "command": "python",
+      "args": ["../mcp-servers/math/server.py"]
+    },
+    "time": {
+      "command": "uvx",
+      "args": ["casual-mcp-server-time"],
+      "env": {
+        "LOCAL_TIME_ZONE": "Asia/Bangkok"
+      }
+    },
+    "weather": {
+      "command": "uvx",
+      "args": ["casual-mcp-server-weather"]
+    },
+    "words": {
+      "command": "uvx",
+      "args": ["casual-mcp-server-words"]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@lmcc-dev/mult-fetch-mcp-server"],
+      "env": {
+        "MCP_LANG": "en"
+      }
+    }
+  },
+  "tool_sets": {
+    "basic": {
+      "description": "Basic tools for time and math",
+      "servers": {
+        "math": true,
+        "time": ["current_time"]
+      }
+    },
+    "research": {
+      "description": "Research tools for weather and words",
+      "servers": {
+        "weather": true,
+        "words": {
+          "exclude": ["random_word"]
+        },
+        "fetch": true
+      }
+    }
+  }
 }
