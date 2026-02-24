@@ -12,14 +12,12 @@ license = { text = "MIT" }
 authors = [{ name = "Alex Stansfield" }]
 dependencies = [
     "casual-llm[openai]>=0.6.0",
-    "dateparser>=1.2.1",
     "fastapi>=0.115.12",
     "fastmcp>=3.0.0",
     "jinja2>=3.1.6",
     "python-dotenv>=1.1.0",
     "questionary>=2.1.0",
     "rank-bm25>=0.2.2",
-    "requests>=2.32.3",
     "rich>=14.0.0",
     "typer>=0.19.2",
     "uvicorn>=0.34.2",
@@ -44,10 +42,6 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-[tool.black]
-line-length = 100
-target-version = ['py310']
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
@@ -60,7 +54,6 @@ warn_unused_configs = true
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
     "coverage>=7.8.0",
     "mypy>=1.15.0",
     "pytest>=8.3.5",

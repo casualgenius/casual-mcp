@@ -240,95 +240,51 @@ class SearchToolsTool:
             },
         )
 
-    async def execute(self, args: dict[str, Any]) -> SyntheticToolResult:
-        """Execute the search-tools tool with the given arguments.
-
-        Supports the following parameter combinations:
-
-        - ``query`` only: BM25 keyword search across all deferred tools.
-        - ``server_name`` only: Load all tools from the named server.
-        - ``tool_names`` only: Exact lookup by tool name.
-        - ``server_name + query``: Scoped keyword search within a server.
-        - ``server_name + tool_names``: Exact lookup filtered to a server.
-        - ``query + tool_names``: ``tool_names`` takes precedence.
+    def _resolve_tools(
+        self,
+        query: str | None,
+        server_name: str | None,
+        tool_names: list[str] | None,
+    ) -> tuple[list[tuple[str, mcp.Tool]], str]:
+        """Resolve the tool search based on the parameter combination.
 
         Returns:
-            ``SyntheticToolResult`` with human-readable result text and
-            ``newly_loaded_tools`` containing only tools not previously loaded.
+            Tuple of (results, not_found_msg).
         """
-        query: str | None = args.get("query")
-        server_name: str | None = args.get("server_name")
-        tool_names: list[str] | None = args.get("tool_names")
-
-        # Normalise empty strings / empty lists to None
-        if query is not None and not query.strip():
-            query = None
-        if tool_names is not None and len(tool_names) == 0:
-            tool_names = None
-
-        # --- No parameters provided ---
-        if query is None and server_name is None and tool_names is None:
-            return SyntheticToolResult(
-                content="Error: Please provide at least one of: query, server_name, or tool_names.",
-                newly_loaded_tools=[],
-            )
-
-        # --- Validate server_name ---
-        if server_name is not None and server_name not in self._server_names:
-            valid = ", ".join(sorted(self._server_names))
-            return SyntheticToolResult(
-                content=(f"Error: Unknown server '{server_name}'. Valid servers: {valid}."),
-                newly_loaded_tools=[],
-            )
-
-        # --- Resolve results depending on parameter combination ---
-        results: list[tuple[str, mcp.Tool]]
-
         if tool_names is not None:
             # tool_names takes precedence when combined with query
             found, not_found = self._search_index.get_by_names(tool_names)
-            # If server_name is given, filter to that server
             if server_name is not None:
                 found = [(s, t) for s, t in found if s == server_name]
-            results = found
-            if not_found:
-                not_found_msg = f"Not found: {', '.join(not_found)}."
-            else:
-                not_found_msg = ""
-        elif server_name is not None and query is not None:
+            not_found_msg = f"Not found: {', '.join(not_found)}." if not_found else ""
+            return found, not_found_msg
+
+        if server_name is not None and query is not None:
             # Scoped search within a server
-            results = self._search_index.search(
+            return self._search_index.search(
                 query,
                 max_results=self._config.max_search_results,
                 server_filter=server_name,
-            )
-            not_found_msg = ""
-        elif server_name is not None:
+            ), ""
+
+        if server_name is not None:
             # Load all tools from server
-            results = self._search_index.get_by_server(server_name)
-            not_found_msg = ""
-        else:
-            # query-only BM25 search
-            assert query is not None
-            results = self._search_index.search(
-                query,
-                max_results=self._config.max_search_results,
-            )
-            not_found_msg = ""
+            return self._search_index.get_by_server(server_name), ""
 
-        # --- No results ---
-        if not results:
-            parts = ["No tools found"]
-            if query:
-                parts.append(f"matching '{query}'")
-            if server_name:
-                parts.append(f"in server '{server_name}'")
-            msg = " ".join(parts) + "."
-            if not_found_msg:
-                msg += f" {not_found_msg}"
-            return SyntheticToolResult(content=msg, newly_loaded_tools=[])
+        # query-only BM25 search (query is guaranteed non-None here by caller)
+        return self._search_index.search(
+            query,  # type: ignore[arg-type]
+            max_results=self._config.max_search_results,
+        ), ""
 
-        # --- Partition into newly-loaded vs already-loaded ---
+    def _mark_loaded(
+        self, results: list[tuple[str, mcp.Tool]]
+    ) -> tuple[list[mcp.Tool], list[str], list[str]]:
+        """Partition results into newly-loaded vs already-loaded, and format details.
+
+        Returns:
+            Tuple of (newly_loaded_tools, already_loaded_names, detail_strings).
+        """
         newly_loaded: list[mcp.Tool] = []
         already_loaded: list[str] = []
         details_parts: list[str] = []
@@ -342,24 +298,65 @@ class SearchToolsTool:
                 self._loaded_tools.add(tool.name)
             details_parts.append(_format_tool_details(sname, tool))
 
-        # --- Build result text ---
-        text_parts: list[str] = []
-        text_parts.append(f"Found {len(results)} tool(s):\n")
-        text_parts.append("\n\n".join(details_parts))
+        return newly_loaded, already_loaded, details_parts
 
+    async def execute(self, args: dict[str, Any]) -> SyntheticToolResult:
+        """Execute the search-tools tool with the given arguments.
+
+        Supports keyword search, server browsing, exact name lookup, and
+        combinations. See class docstring for full parameter details.
+        """
+        query: str | None = args.get("query")
+        server_name: str | None = args.get("server_name")
+        tool_names: list[str] | None = args.get("tool_names")
+
+        # Normalise empty strings / empty lists to None
+        if query is not None and not query.strip():
+            query = None
+        if tool_names is not None and len(tool_names) == 0:
+            tool_names = None
+
+        if query is None and server_name is None and tool_names is None:
+            return SyntheticToolResult(
+                content="Error: Please provide at least one of: query, server_name, or tool_names.",
+                newly_loaded_tools=[],
+            )
+
+        if server_name is not None and server_name not in self._server_names:
+            valid = ", ".join(sorted(self._server_names))
+            return SyntheticToolResult(
+                content=f"Error: Unknown server '{server_name}'. Valid servers: {valid}.",
+                newly_loaded_tools=[],
+            )
+
+        results, not_found_msg = self._resolve_tools(query, server_name, tool_names)
+
+        if not results:
+            parts = ["No tools found"]
+            if query:
+                parts.append(f"matching '{query}'")
+            if server_name:
+                parts.append(f"in server '{server_name}'")
+            msg = " ".join(parts) + "."
+            if not_found_msg:
+                msg += f" {not_found_msg}"
+            return SyntheticToolResult(content=msg, newly_loaded_tools=[])
+
+        newly_loaded, already_loaded, details_parts = self._mark_loaded(results)
+
+        # Build result text
+        text_parts: list[str] = [f"Found {len(results)} tool(s):\n"]
+        text_parts.append("\n\n".join(details_parts))
         if already_loaded:
             text_parts.append(f"\n\nAlready loaded: {', '.join(already_loaded)}")
-
         if not_found_msg:
             text_parts.append(f"\n\n{not_found_msg}")
-
-        content = "".join(text_parts)
 
         logger.debug(
             f"search-tools: {len(newly_loaded)} newly loaded, {len(already_loaded)} already loaded"
         )
 
         return SyntheticToolResult(
-            content=content,
+            content="".join(text_parts),
             newly_loaded_tools=newly_loaded,
         )

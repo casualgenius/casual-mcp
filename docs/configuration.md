@@ -89,6 +89,7 @@ Servers can be local (stdio) or remote (HTTP/SSE).
 | `command` | Yes | Command to run (e.g., `python`, `npm`) |
 | `args` | Yes | Arguments as a list |
 | `env` | No | Environment variables for subprocess |
+| `defer_loading` | No | When `true`, tools from this server are deferred for on-demand discovery (default: `false`). Requires `tool_discovery.enabled` |
 
 ### Remote Server Config
 
@@ -105,6 +106,7 @@ Servers can be local (stdio) or remote (HTTP/SSE).
 |-------|----------|-------------|
 | `url` | Yes | Server URL |
 | `transport` | No | `http` (default), `sse`, or `streamable-http` |
+| `defer_loading` | No | When `true`, tools from this server are deferred for on-demand discovery (default: `false`). Requires `tool_discovery.enabled` |
 
 ## Toolsets
 
@@ -225,6 +227,41 @@ toolset = ToolSetConfig(
 )
 ```
 
+## Tool Discovery
+
+When you connect many MCP servers, the total tool count can overwhelm the LLM's context. Tool discovery defers loading tools from specific servers, making them available on demand via a synthetic `search-tools` tool.
+
+Add a `tool_discovery` section to your config and set `defer_loading: true` on servers whose tools should be deferred:
+
+```json
+{
+  "servers": {
+    "core-tools": {
+      "command": "python",
+      "args": ["servers/core.py"]
+    },
+    "research-tools": {
+      "command": "python",
+      "args": ["servers/research.py"],
+      "defer_loading": true
+    }
+  },
+  "tool_discovery": {
+    "enabled": true,
+    "defer_all": false,
+    "max_search_results": 5
+  }
+}
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `enabled` | No | `false` | Master switch for tool discovery |
+| `defer_all` | No | `false` | Defer all servers regardless of per-server `defer_loading` |
+| `max_search_results` | No | `5` | Maximum tools returned per `search-tools` call |
+
+See the [Tool Discovery](../CLAUDE.md#tool-discovery) section in the project docs for full details on how it works.
+
 ## Legacy Config Migration
 
-Configs using the old format (with `provider` and `endpoint` directly in model entries) are automatically migrated at load time. A deprecation warning is emitted. Update your config to the new `clients`/`models` split to avoid the warning.
+Configs using the old format (with `provider` and `endpoint` directly in model entries) can be migrated using `casual-mcp migrate-config`.

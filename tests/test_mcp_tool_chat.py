@@ -19,29 +19,6 @@ from casual_mcp.models.mcp_server_config import StdioServerConfig
 class TestMcpToolChat:
     """Tests for McpToolChat class."""
 
-    @pytest.fixture
-    def mock_client(self):
-        """Create mock MCP client."""
-        client = AsyncMock()
-        client.__aenter__ = AsyncMock(return_value=client)
-        client.__aexit__ = AsyncMock(return_value=None)
-        return client
-
-    @pytest.fixture
-    def mock_model(self):
-        """Create mock LLM model."""
-        model = AsyncMock(spec=Model)
-        # get_usage is a sync method that returns Usage or None
-        model.get_usage = Mock(return_value=None)
-        return model
-
-    @pytest.fixture
-    def mock_tool_cache(self):
-        """Create mock tool cache."""
-        cache = Mock()
-        cache.get_tools = AsyncMock(return_value=[])
-        return cache
-
     async def test_execute_tool_success(self, mock_client, mock_model, mock_tool_cache):
         """Test successful tool execution."""
         # Setup
@@ -148,9 +125,11 @@ class TestMcpToolChat:
 
         await chat.chat(messages, model=mock_model)
 
-        # Should have added system message
-        assert len(messages) >= 2
-        assert messages[0].role == "system"
+        # System message should be passed to the model, not mutate the caller's list
+        assert len(messages) == 1, "Caller's message list should not be mutated"
+        call_messages = mock_model.chat.call_args[1]["messages"]
+        assert call_messages[0].role == "system"
+        assert call_messages[0].content == "System prompt"
 
     async def test_chat_doesnt_duplicate_system_message(
         self, mock_client, mock_model, mock_tool_cache
@@ -165,9 +144,12 @@ class TestMcpToolChat:
 
         await chat.chat(messages, model=mock_model)
 
-        # Should not add another system message
-        system_messages = [m for m in messages if m.role == "system"]
+        # Should not add another system message; caller list untouched
+        assert len(messages) == 2, "Caller's message list should not be mutated"
+        call_messages = mock_model.chat.call_args[1]["messages"]
+        system_messages = [m for m in call_messages if m.role == "system"]
         assert len(system_messages) == 1
+        assert system_messages[0].content == "Existing system"
 
     async def test_chat_loops_on_tool_calls(self, mock_client, mock_model, mock_tool_cache):
         """Test that chat loops when LLM requests tool calls."""
@@ -218,21 +200,6 @@ class TestMcpToolChat:
 
 class TestMcpToolChatStats:
     """Tests for McpToolChat stats functionality."""
-
-    @pytest.fixture
-    def mock_client(self):
-        """Create mock MCP client."""
-        client = AsyncMock()
-        client.__aenter__ = AsyncMock(return_value=client)
-        client.__aexit__ = AsyncMock(return_value=None)
-        return client
-
-    @pytest.fixture
-    def mock_tool_cache(self):
-        """Create mock tool cache."""
-        cache = Mock()
-        cache.get_tools = AsyncMock(return_value=[])
-        return cache
 
     def test_get_stats_returns_none_before_chat(self, mock_client, mock_tool_cache):
         """Test that get_stats returns None before any chat calls."""
@@ -728,3 +695,57 @@ class TestMcpToolChatFromConfig:
         system_msgs = [m for m in messages if m.role == "system"]
         assert len(system_msgs) == 1
         assert system_msgs[0].content == "explicit system"
+
+
+class TestConcurrentRequests:
+    """Test that concurrent chat() calls don't corrupt each other's stats."""
+
+    async def test_concurrent_calls_have_independent_stats(self):
+        """Two concurrent chat() calls should produce independent stats."""
+        import asyncio
+
+        from casual_llm import Usage
+
+        client = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        cache = Mock()
+        cache.get_tools = AsyncMock(return_value=[])
+        cache.version = 1
+
+        chat = McpToolChat(client, "System", cache)
+
+        # Create two models with different usage to distinguish them
+        model_a = AsyncMock(spec=Model)
+        model_a.chat = AsyncMock(return_value=AssistantMessage(content="A"))
+        model_a.get_usage = Mock(return_value=Usage(prompt_tokens=100, completion_tokens=50))
+
+        model_b = AsyncMock(spec=Model)
+        model_b.chat = AsyncMock(return_value=AssistantMessage(content="B"))
+        model_b.get_usage = Mock(return_value=Usage(prompt_tokens=10, completion_tokens=5))
+
+        # Run both calls concurrently
+        results = await asyncio.gather(
+            chat.chat([UserMessage(content="Call A")], model=model_a),
+            chat.chat([UserMessage(content="Call B")], model=model_b),
+        )
+
+        # Both should succeed
+        assert len(results) == 2
+        assert results[0][-1].content == "A"
+        assert results[1][-1].content == "B"
+
+        # get_stats() returns whichever finished last — but the key point
+        # is that it should be one complete stats object, not a corrupted mix
+        stats = chat.get_stats()
+        assert stats is not None
+        assert stats.llm_calls == 1
+        # Should be from one call — either (100,50) or (10,5), not a mix
+        assert stats.tokens.prompt_tokens in (100, 10)
+        assert stats.tokens.completion_tokens in (50, 5)
+        # They should be from the same call
+        if stats.tokens.prompt_tokens == 100:
+            assert stats.tokens.completion_tokens == 50
+        else:
+            assert stats.tokens.completion_tokens == 5

@@ -9,6 +9,7 @@ from casual_llm import (
 
 from .chat_stats import (
     ChatStats,
+    DiscoveryStats,
     TokenUsageStats,
     ToolCallStats,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "SystemMessage",
     "ChatMessage",
     "ChatStats",
+    "DiscoveryStats",
     "TokenUsageStats",
     "ToolCallStats",
     "McpClientConfig",

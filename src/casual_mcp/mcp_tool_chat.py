@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from collections.abc import Sequence
@@ -32,6 +33,10 @@ logger = get_logger("mcp_tool_chat")
 
 # Type alias for metadata dictionary
 MetaDict = dict[str, Any]
+
+# Default maximum number of tool-call loop iterations before aborting.
+# Can be overridden via the MCP_MAX_CHAT_ITERATIONS environment variable.
+DEFAULT_MAX_ITERATIONS = int(os.getenv("MCP_MAX_CHAT_ITERATIONS", "50"))
 
 
 class McpToolChat:
@@ -182,6 +187,125 @@ class McpToolChat:
 
         return self.system
 
+    def _setup_discovery(
+        self,
+        tools: list[mcp.Tool],
+        stats: ChatStats,
+    ) -> tuple[list[mcp.Tool], set[str], dict[str, SyntheticTool]]:
+        """Partition tools and build discovery state for a chat call.
+
+        Returns:
+            Tuple of (loaded_tools, deferred_tool_names, call_synthetic_registry).
+        """
+        call_synthetic_registry = dict(self._synthetic_registry)
+        deferred_tool_names: set[str] = set()
+        loaded_tools: list[mcp.Tool] = list(tools)
+
+        if not self._is_discovery_enabled():
+            return loaded_tools, deferred_tool_names, call_synthetic_registry
+
+        if self._config is None or self._tool_discovery_config is None:
+            raise RuntimeError(
+                "Tool discovery is enabled but config is not set. "
+                "Use McpToolChat.from_config() to enable tool discovery."
+            )
+
+        stats.discovery = DiscoveryStats()
+
+        loaded_tools, deferred_by_server = partition_tools(tools, self._config, self.server_names)
+
+        if deferred_by_server:
+            for server_tools in deferred_by_server.values():
+                for tool in server_tools:
+                    deferred_tool_names.add(tool.name)
+
+            all_deferred_tools = [
+                t for server_tools in deferred_by_server.values() for t in server_tools
+            ]
+            tool_server_map = build_tool_server_map(all_deferred_tools, self.server_names)
+            search_index = ToolSearchIndex(all_deferred_tools, tool_server_map)
+
+            search_tools_tool = SearchToolsTool(
+                deferred_tools=deferred_by_server,
+                server_names=sorted(deferred_by_server.keys()),
+                search_index=search_index,
+                config=self._tool_discovery_config,
+            )
+            call_synthetic_registry[search_tools_tool.name] = search_tools_tool
+
+            logger.info(
+                f"Tool discovery enabled: {len(loaded_tools)} loaded, "
+                f"{len(deferred_tool_names)} deferred, search-tools injected"
+            )
+        else:
+            logger.debug("Tool discovery enabled but no deferred tools - search-tools not injected")
+
+        return loaded_tools, deferred_tool_names, call_synthetic_registry
+
+    async def _execute_tool_call(
+        self,
+        tool_call: AssistantToolCall,
+        *,
+        deferred_tool_names: set[str],
+        call_synthetic_registry: dict[str, SyntheticTool],
+        loaded_tools: list[mcp.Tool],
+        stats: ChatStats,
+        meta: MetaDict | None,
+    ) -> tuple[ToolResultMessage, bool]:
+        """Execute a single tool call and return the result.
+
+        Returns:
+            Tuple of (result_message, synthetic_definitions_changed).
+        """
+        tool_name = tool_call.function.name
+        definitions_changed = False
+
+        # Track tool call stats
+        stats.tool_calls.by_tool[tool_name] = stats.tool_calls.by_tool.get(tool_name, 0) + 1
+        if tool_name in call_synthetic_registry:
+            server_name = "_synthetic"
+        else:
+            server_name, _ = extract_server_and_tool(tool_name, self.server_names)
+        stats.tool_calls.by_server[server_name] = stats.tool_calls.by_server.get(server_name, 0) + 1
+
+        try:
+            if tool_name in deferred_tool_names:
+                result = ToolResultMessage(
+                    name=tool_name,
+                    tool_call_id=tool_call.id,
+                    content=(
+                        f"Error: Tool '{tool_name}' is not yet loaded. "
+                        f"Use the 'search-tools' tool to discover and load "
+                        f"it first, then call it again."
+                    ),
+                )
+            elif tool_name in call_synthetic_registry:
+                result, newly_loaded = await self._execute_synthetic_with_expansion(
+                    tool_call, registry=call_synthetic_registry
+                )
+                if tool_name == "search-tools" and stats.discovery is not None:
+                    stats.discovery.search_calls += 1
+                    stats.discovery.tools_discovered += len(newly_loaded)
+                if newly_loaded:
+                    loaded_tools.extend(newly_loaded)
+                    for new_tool in newly_loaded:
+                        deferred_tool_names.discard(new_tool.name)
+                    definitions_changed = True
+                    logger.info(f"Expanded loaded tools by {len(newly_loaded)} from search-tools")
+            else:
+                result = await self.execute(tool_call, meta=meta)
+        except Exception as e:
+            logger.error(
+                f"Failed to execute tool '{tool_call.function.name}' (id={tool_call.id}): {e}"
+            )
+            result = ToolResultMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=f"Error: Tool '{tool_call.function.name}' failed to execute.",
+            )
+
+        return result, definitions_changed
+
     async def chat(
         self,
         messages: list[ChatMessage],
@@ -207,93 +331,44 @@ class McpToolChat:
         Returns:
             List of response messages including any tool calls and results
         """
+        # Work on a copy so we don't mutate the caller's list
+        messages = list(messages)
+
         # Resolve model and system prompt for this call
         resolved_model = self._resolve_model(model)
         model_name = model if isinstance(model, str) else None
         resolved_system = await self._resolve_system_prompt(system, model_name)
 
         tools = await self.tool_cache.get_tools()
-
-        # Filter tools if a toolset is specified
         if tool_set is not None:
             tools = filter_tools_by_toolset(tools, tool_set, self.server_names, validate=True)
             logger.info(f"Filtered to {len(tools)} tools using toolset")
 
-        # Reset stats at the start of each chat
-        self._last_stats = ChatStats()
+        # Per-call stats (assigned to self._last_stats at the end)
+        stats = ChatStats()
 
-        # --- Tool discovery: partition tools and set up search ---
-        # Build a per-call synthetic registry that includes both the
-        # statically registered synthetic tools and the dynamic search-tools.
-        call_synthetic_registry = dict(self._synthetic_registry)
-
-        # Track deferred tool names for error interception
-        deferred_tool_names: set[str] = set()
-
-        # The loaded MCP tools list (mutable within the loop)
-        loaded_tools: list[mcp.Tool] = list(tools)
+        # Set up tool discovery (partitioning, search index, synthetic registry)
+        loaded_tools, deferred_tool_names, call_synthetic_registry = self._setup_discovery(
+            tools, stats
+        )
 
         # Track the tool cache version for mid-session change detection
         current_cache_version = self.tool_cache.version
 
-        if self._is_discovery_enabled():
-            assert self._config is not None
-            assert self._tool_discovery_config is not None
-
-            # Initialize discovery stats tracking
-            self._last_stats.discovery = DiscoveryStats()
-
-            loaded_tools, deferred_by_server = partition_tools(
-                tools, self._config, self.server_names
-            )
-
-            if deferred_by_server:
-                # Build the deferred tool name set
-                for server_tools in deferred_by_server.values():
-                    for tool in server_tools:
-                        deferred_tool_names.add(tool.name)
-
-                # Build the search index from deferred tools
-                all_deferred_tools = [
-                    t for server_tools in deferred_by_server.values() for t in server_tools
-                ]
-                tool_server_map = build_tool_server_map(all_deferred_tools, self.server_names)
-                search_index = ToolSearchIndex(all_deferred_tools, tool_server_map)
-
-                # Create SearchToolsTool for this call
-                deferred_server_names = sorted(deferred_by_server.keys())
-                search_tools_tool = SearchToolsTool(
-                    deferred_tools=deferred_by_server,
-                    server_names=deferred_server_names,
-                    search_index=search_index,
-                    config=self._tool_discovery_config,
-                )
-
-                # Add to per-call synthetic registry
-                call_synthetic_registry[search_tools_tool.name] = search_tools_tool
-
-                logger.info(
-                    f"Tool discovery enabled: {len(loaded_tools)} loaded, "
-                    f"{len(deferred_tool_names)} deferred, search-tools injected"
-                )
-            else:
-                logger.debug(
-                    "Tool discovery enabled but no deferred tools - search-tools not injected"
-                )
-
         # Add a system message if required
         has_system_message = any(message.role == "system" for message in messages)
         if resolved_system and not has_system_message:
-            # Insert the system message at the start of the messages
             logger.debug("Adding System Message")
             messages.insert(0, SystemMessage(content=resolved_system))
 
         # Build combined tool list: MCP tools + synthetic tool definitions
+        # Cache the converted MCP tools to avoid reconversion every iteration
+        converted_mcp_tools = tools_from_mcp(loaded_tools)
         synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
 
         logger.info("Start Chat")
         response_messages: list[ChatMessage] = []
-        while True:
+        for _iteration in range(DEFAULT_MAX_ITERATIONS):
             # Check for tool cache version changes mid-session
             if self._is_discovery_enabled() and self.tool_cache.version != current_cache_version:
                 logger.info("Tool cache version changed mid-session, rebuilding discovery index")
@@ -307,22 +382,22 @@ class McpToolChat:
                     loaded_tools=loaded_tools,
                     base_synthetic_registry=self._synthetic_registry,
                 )
+                converted_mcp_tools = tools_from_mcp(loaded_tools)
                 synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
 
             logger.info("Calling the LLM")
-            all_tools = tools_from_mcp(loaded_tools) + synthetic_definitions
+            all_tools = converted_mcp_tools + synthetic_definitions
             ai_message = await resolved_model.chat(messages=messages, tools=all_tools)
 
             # Accumulate token usage stats
-            self._last_stats.llm_calls += 1
+            stats.llm_calls += 1
             usage = resolved_model.get_usage()
             if usage:
                 prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-                self._last_stats.tokens.prompt_tokens += prompt_tokens
-                self._last_stats.tokens.completion_tokens += completion_tokens
+                stats.tokens.prompt_tokens += prompt_tokens
+                stats.tokens.completion_tokens += completion_tokens
 
-            # Add the assistant's message
             response_messages.append(ai_message)
             messages.append(ai_message)
 
@@ -331,76 +406,49 @@ class McpToolChat:
                 break
 
             logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
+
+            # Execute tool calls concurrently, then apply results sequentially
+            call_results = await asyncio.gather(
+                *(
+                    self._execute_tool_call(
+                        tool_call,
+                        deferred_tool_names=deferred_tool_names,
+                        call_synthetic_registry=call_synthetic_registry,
+                        loaded_tools=loaded_tools,
+                        stats=stats,
+                        meta=meta,
+                    )
+                    for tool_call in ai_message.tool_calls
+                )
+            )
+
             result_count = 0
-            for tool_call in ai_message.tool_calls:
-                tool_name = tool_call.function.name
-
-                # Track tool call stats - synthetic tools use "_synthetic" server
-                self._last_stats.tool_calls.by_tool[tool_name] = (
-                    self._last_stats.tool_calls.by_tool.get(tool_name, 0) + 1
-                )
-                if tool_name in call_synthetic_registry:
-                    server_name = "_synthetic"
-                else:
-                    server_name, _ = extract_server_and_tool(tool_name, self.server_names)
-                self._last_stats.tool_calls.by_server[server_name] = (
-                    self._last_stats.tool_calls.by_server.get(server_name, 0) + 1
-                )
-
-                try:
-                    # Check if this is a deferred tool called without search
-                    if tool_name in deferred_tool_names:
-                        result = ToolResultMessage(
-                            name=tool_name,
-                            tool_call_id=tool_call.id,
-                            content=(
-                                f"Error: Tool '{tool_name}' is not yet loaded. "
-                                f"Use the 'search-tools' tool to discover and load "
-                                f"it first, then call it again."
-                            ),
-                        )
-                    # Check synthetic registry before forwarding to MCP
-                    elif tool_name in call_synthetic_registry:
-                        result, newly_loaded = await self._execute_synthetic_with_expansion(
-                            tool_call, registry=call_synthetic_registry
-                        )
-                        # Track discovery stats for search-tools calls
-                        if tool_name == "search-tools" and self._last_stats.discovery is not None:
-                            self._last_stats.discovery.search_calls += 1
-                            self._last_stats.discovery.tools_discovered += len(newly_loaded)
-                        # Handle newly loaded tools from search-tools execution
-                        if newly_loaded:
-                            loaded_tools.extend(newly_loaded)
-                            for new_tool in newly_loaded:
-                                deferred_tool_names.discard(new_tool.name)
-                            # Rebuild synthetic definitions for next iteration
-                            synthetic_definitions = [
-                                st.definition for st in call_synthetic_registry.values()
-                            ]
-                            logger.info(
-                                f"Expanded loaded tools by {len(newly_loaded)} from search-tools"
-                            )
-                    else:
-                        result = await self.execute(tool_call, meta=meta)
-                except Exception as e:
-                    logger.error(
-                        f"Failed to execute tool '{tool_call.function.name}' "
-                        f"(id={tool_call.id}): {e}"
-                    )
-                    # Surface the failure to the LLM so it knows the tool failed
-                    result = ToolResultMessage(
-                        name=tool_call.function.name,
-                        tool_call_id=tool_call.id,
-                        content=f"Error executing tool: {e}",
-                    )
+            for result, definitions_changed in call_results:
+                if definitions_changed:
+                    converted_mcp_tools = tools_from_mcp(loaded_tools)
+                    synthetic_definitions = [
+                        st.definition for st in call_synthetic_registry.values()
+                    ]
                 if result:
                     messages.append(result)
                     response_messages.append(result)
-                    result_count = result_count + 1
+                    result_count += 1
 
             logger.info(f"Added {result_count} tool results")
 
+        else:
+            # for-loop exhausted without breaking — the LLM never stopped calling tools
+            logger.error("Chat loop exceeded maximum iterations (%d)", DEFAULT_MAX_ITERATIONS)
+            raise RuntimeError(
+                f"Chat loop exceeded maximum {DEFAULT_MAX_ITERATIONS} iterations. "
+                "The LLM may be stuck in a tool-calling loop. "
+                "Set MCP_MAX_CHAT_ITERATIONS to adjust the limit."
+            )
+
         logger.debug(f"Final Response: {response_messages[-1].content}")
+
+        # Publish stats so get_stats() returns the result of this call
+        self._last_stats = stats
 
         return response_messages
 
@@ -425,8 +473,11 @@ class McpToolChat:
         Returns:
             Tuple of (new_loaded_tools, new_deferred_names, new_call_registry).
         """
-        assert self._config is not None
-        assert self._tool_discovery_config is not None
+        if self._config is None or self._tool_discovery_config is None:
+            raise RuntimeError(
+                "Tool discovery is enabled but config is not set. "
+                "Use McpToolChat.from_config() to enable tool discovery."
+            )
 
         fresh_tools = await self.tool_cache.get_tools()
         if tool_set is not None:
@@ -520,30 +571,6 @@ class McpToolChat:
 
         return message, result.newly_loaded_tools
 
-    async def _execute_synthetic(
-        self,
-        tool_call: AssistantToolCall,
-        registry: dict[str, SyntheticTool] | None = None,
-    ) -> ToolResultMessage:
-        """Execute a synthetic tool call.
-
-        Convenience wrapper around ``_execute_synthetic_with_expansion``
-        that discards the ``newly_loaded_tools`` list. Used by callers
-        that do not need dynamic tool expansion.
-
-        Args:
-            tool_call: The tool call to execute via the synthetic tool registry.
-            registry: Optional registry to use instead of self._synthetic_registry.
-
-        Returns:
-            ToolResultMessage with the synthetic tool execution result.
-
-        Raises:
-            KeyError: If the tool is not in the synthetic registry.
-        """
-        message, _ = await self._execute_synthetic_with_expansion(tool_call, registry)
-        return message
-
     async def execute(
         self,
         tool_call: AssistantToolCall,
@@ -565,16 +592,19 @@ class McpToolChat:
         try:
             async with self.mcp_client:
                 result = await self.mcp_client.call_tool(tool_name, tool_args, meta=meta)
-        except Exception as e:
-            if isinstance(e, ValueError):
-                logger.warning(e)
-            else:
-                logger.error(f"Error calling tool: {e}")
-
+        except ValueError as e:
+            logger.warning(f"Tool call validation error: {e}")
             return ToolResultMessage(
                 name=tool_call.function.name,
                 tool_call_id=tool_call.id,
                 content=str(e),
+            )
+        except Exception as e:
+            logger.error(f"Error calling tool '{tool_name}': {e}")
+            return ToolResultMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=f"Error: Tool '{tool_name}' failed to execute.",
             )
 
         logger.debug(f"Tool Call Result: {result}")

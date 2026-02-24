@@ -543,7 +543,7 @@ class TestDiscoverAndUseFlow:
         chat._config = config
         chat._tool_discovery_config = config.tool_discovery
 
-        response = await chat.chat([UserMessage(content="Test")], model=mock_model)
+        await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # After first search, forecast should be loaded
         second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
@@ -792,12 +792,12 @@ class TestToolCacheVersionChange:
         third_call_tools = mock_model.chat.call_args_list[2][1]["tools"]
         third_call_names = {t.name for t in third_call_tools}
         assert "math_add" in third_call_names, "Eagerly loaded tool should survive rebuild"
-        assert (
-            "weather_get" in third_call_names
-        ), "Previously discovered tool should be preserved across rebuild"
-        assert (
-            "search-tools" in third_call_names
-        ), "search-tools should be re-injected when new deferred tools exist"
+        assert "weather_get" in third_call_names, (
+            "Previously discovered tool should be preserved across rebuild"
+        )
+        assert "search-tools" in third_call_names, (
+            "search-tools should be re-injected when new deferred tools exist"
+        )
 
     async def test_version_change_removes_search_tools_when_no_deferred_remain(
         self, mock_client: AsyncMock, mock_model: AsyncMock

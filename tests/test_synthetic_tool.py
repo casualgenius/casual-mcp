@@ -393,8 +393,7 @@ class TestMcpToolChatSyntheticTools:
         assert len(response) == 3
         error_result = response[1]
         assert error_result.name == "error_tool"
-        assert "Error executing tool" in error_result.content
-        assert "Synthetic tool failed" in error_result.content
+        assert "Error: Tool 'error_tool' failed to execute." in error_result.content
 
 
 class TestSyntheticToolStats:

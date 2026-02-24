@@ -1,6 +1,35 @@
 """Shared pytest fixtures."""
 
 import pytest
+from unittest.mock import AsyncMock, Mock
+
+from casual_llm import Model
+
+
+@pytest.fixture
+def mock_client():
+    """Create a mock MCP client with async context manager support."""
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    return client
+
+
+@pytest.fixture
+def mock_model():
+    """Create a mock LLM model."""
+    model = AsyncMock(spec=Model)
+    model.get_usage = Mock(return_value=None)
+    return model
+
+
+@pytest.fixture
+def mock_tool_cache():
+    """Create a mock tool cache with empty tool list."""
+    cache = Mock()
+    cache.get_tools = AsyncMock(return_value=[])
+    cache.version = 1
+    return cache
 
 
 @pytest.fixture

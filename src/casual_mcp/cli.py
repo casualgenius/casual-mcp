@@ -24,7 +24,7 @@ console = Console()
 
 
 @app.command()
-def serve(host: str = "0.0.0.0", port: int = 8000, reload: bool = True) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
     """
     Start the Casual MCP API server.
     """

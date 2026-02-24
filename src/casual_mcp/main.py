@@ -1,4 +1,6 @@
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from casual_llm import ChatMessage
@@ -8,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
+from casual_mcp.models.config import Config
 from casual_mcp.models.toolset_config import ToolSetConfig
 from casual_mcp.tool_filter import ToolSetValidationError
 from casual_mcp.utils import load_config
@@ -18,8 +21,6 @@ load_dotenv()
 # Configure logging
 configure_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = get_logger("main")
-
-config = load_config("casual_mcp_config.json")
 
 default_system_prompt = """You are a helpful assistant.
 
@@ -34,9 +35,28 @@ You must not speculate or guess about dates — if a date is given to you by a t
 Always present information as current and factual.
 """
 
-chat_instance = McpToolChat.from_config(config, system=default_system_prompt)
 
-app = FastAPI()
+class AppState:
+    """Holds application-wide state initialised during the lifespan."""
+
+    config: Config
+    chat_instance: McpToolChat
+
+
+state = AppState()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialise shared resources on startup; clean up on shutdown."""
+    state.config = load_config("casual_mcp_config.json")
+    state.chat_instance = McpToolChat.from_config(state.config, system=default_system_prompt)
+    logger.info("Application started")
+    yield
+    logger.info("Application shut down")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -62,14 +82,14 @@ def resolve_tool_set(tool_set_name: str | None) -> ToolSetConfig | None:
     if tool_set_name is None:
         return None
 
-    if tool_set_name not in config.tool_sets:
+    if tool_set_name not in state.config.tool_sets:
         raise HTTPException(
             status_code=400,
             detail=f"Toolset '{tool_set_name}' not found. "
-            f"Available: {list(config.tool_sets.keys())}",
+            f"Available: {list(state.config.tool_sets.keys())}",
         )
 
-    return config.tool_sets[tool_set_name]
+    return state.config.tool_sets[tool_set_name]
 
 
 @app.post("/chat")
@@ -77,7 +97,7 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
     tool_set_config = resolve_tool_set(req.tool_set)
 
     try:
-        messages = await chat_instance.chat(
+        messages = await state.chat_instance.chat(
             req.messages,
             tool_set=tool_set_config,
             model=req.model,
@@ -87,11 +107,14 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
     except ToolSetValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in /chat: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not messages:
         error_result: dict[str, Any] = {"messages": [], "response": ""}
         if req.include_stats:
-            error_result["stats"] = chat_instance.get_stats()
+            error_result["stats"] = state.chat_instance.get_stats()
         raise HTTPException(
             status_code=500,
             detail={"error": "No response generated", **error_result},
@@ -99,7 +122,7 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
 
     result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
     if req.include_stats:
-        result["stats"] = chat_instance.get_stats()
+        result["stats"] = state.chat_instance.get_stats()
     return result
 
 
@@ -111,5 +134,5 @@ async def list_toolsets() -> dict[str, dict[str, Any]]:
             "description": ts.description,
             "servers": list(ts.servers.keys()),
         }
-        for name, ts in config.tool_sets.items()
+        for name, ts in state.config.tool_sets.items()
     }

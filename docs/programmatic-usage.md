@@ -191,6 +191,7 @@ from casual_mcp.models import (
     ToolSetConfig,
     ExcludeSpec,
     ChatStats,
+    DiscoveryStats,
     TokenUsageStats,
     ToolCallStats,
 )

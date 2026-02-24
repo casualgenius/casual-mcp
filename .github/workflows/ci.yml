@@ -22,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
-      - name: Check code formatting with black
-        run: uv run black --check src/ tests/ examples/
+      - name: Check code formatting with ruff
+        run: uv run ruff format --check src/ tests/ examples/
 
       - name: Lint with ruff
         run: uv run ruff check src/ tests/ examples/
