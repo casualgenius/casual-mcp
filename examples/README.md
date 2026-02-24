@@ -45,7 +45,8 @@ Demonstrates deferred tool loading with the `search-tools` meta-tool.
 
 | Script | Description |
 |--------|-------------|
-| `chat_with_tool_discovery.py` | Shows how tools are partitioned into loaded vs deferred sets, then lets the LLM discover and load deferred tools on demand |
+| `single_server_discovery.py` | Shows how tools are partitioned into loaded vs deferred sets, then lets the LLM discover and load deferred tools on demand |
+| `multi_server_discovery.py` | Asks a question that requires tools from both the `time` and `weather` servers, forcing the LLM to search across multiple deferred servers |
 
 The config in this folder has `tool_discovery` enabled and at least one server marked with `defer_loading: true`.
 
