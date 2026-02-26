@@ -621,6 +621,7 @@ class McpToolChat:
 
         # Prefer structuredContent when available (machine-readable format)
         # Note: MCP types use camelCase (structuredContent), mypy stubs may differ
+        # Todo: Use structured data from FastMCP - https://gofastmcp.com/clients/tools#structured-results
         structured = getattr(result, "structuredContent", None)
         if structured is not None:
             try:

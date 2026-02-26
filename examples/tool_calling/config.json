@@ -37,7 +37,7 @@
   "servers": {
     "math": {
       "command": "python",
-      "args": ["../mcp-servers/math/server.py"]
+      "args": ["../../mcp-servers/math/server.py"]
     },
     "time": {
       "command": "uvx",
