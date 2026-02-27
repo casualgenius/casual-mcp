@@ -18,12 +18,22 @@
 
 ## Installation
 
+The base package includes the core framework. Install with the extras for the LLM provider(s) you need:
+
 ```bash
 # Using uv
-uv add casual-mcp
+uv add casual-mcp[openai]
+uv add casual-mcp[anthropic]
+uv add casual-mcp[ollama]
+
+# Multiple providers
+uv add casual-mcp[openai,anthropic]
+
+# All providers
+uv add casual-mcp[all]
 
 # Using pip
-pip install casual-mcp
+pip install casual-mcp[openai]
 ```
 
 For development:
