@@ -79,10 +79,7 @@ async def main():
             # Show stats
             stats = chat.get_stats()
             if stats:
-                print(
-                    f"\nStats: {stats.tool_calls.total} tool calls, "
-                    f"{stats.llm_calls} LLM calls"
-                )
+                print(f"\nStats: {stats.tool_calls.total} tool calls, {stats.llm_calls} LLM calls")
         else:
             print("Note: 'math' server not configured, skipping programmatic toolset example")
 

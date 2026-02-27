@@ -74,8 +74,12 @@ async def main():
         if turn1_stats and turn2_stats:
             total_tool_calls = turn1_stats.tool_calls.total + turn2_stats.tool_calls.total
             total_llm_calls = turn1_stats.llm_calls + turn2_stats.llm_calls
-            print(f"Turn 1: {turn1_stats.tool_calls.total} tool calls, {turn1_stats.llm_calls} LLM calls")
-            print(f"Turn 2: {turn2_stats.tool_calls.total} tool calls, {turn2_stats.llm_calls} LLM calls")
+            print(
+                f"Turn 1: {turn1_stats.tool_calls.total} tool calls, {turn1_stats.llm_calls} LLM calls"
+            )
+            print(
+                f"Turn 2: {turn2_stats.tool_calls.total} tool calls, {turn2_stats.llm_calls} LLM calls"
+            )
             print(f"Total:  {total_tool_calls} tool calls, {total_llm_calls} LLM calls")
 
 

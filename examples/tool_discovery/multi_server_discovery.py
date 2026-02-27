@@ -59,12 +59,9 @@ async def main():
 
         print("\nUser: I'm planning a weekend trip to Tokyo.")
         print(
-            "      What date is next Saturday, and what's the weather forecast for Tokyo "
-            "that day?"
+            "      What date is next Saturday, and what's the weather forecast for Tokyo that day?"
         )
-        print(
-            "\n(The LLM needs to discover tools from both the 'time' and 'weather' servers)\n"
-        )
+        print("\n(The LLM needs to discover tools from both the 'time' and 'weather' servers)\n")
 
         response_messages = await chat.chat(messages, model=MODEL_NAME)
 
@@ -83,9 +80,7 @@ async def main():
         # Show discovery stats
         stats = chat.get_stats()
         if stats:
-            print(
-                f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls"
-            )
+            print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
             if stats.discovery:
                 print(
                     f"Discovery: {stats.discovery.search_calls} search calls, "
