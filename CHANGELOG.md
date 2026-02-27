@@ -10,6 +10,13 @@
 - **`McpToolChat.chat()`** now requires a `model` parameter (string name or `Model` instance) at call time.
 - **`search_tools`** synthetic tool renamed to **`search-tools`** to avoid naming conflicts with FastMCP's underscore-prefixed tool conventions.
 - **FastMCP** upgraded from v2 to v3 (`fastmcp>=3.0.0`).
+- **FastAPI lifespan** wraps `McpToolChat` in `async with` so the API server maintains persistent MCP connections for its lifetime.
+- **Examples** updated to use `async with` pattern, replacing manual `.close()` calls.
+- **Examples** suppress harmless `"Event loop is closed"` `RuntimeError` on Python < 3.12 (subprocess transport cleanup after `asyncio.run()` closes the loop).
+
+### Fixed
+
+- **MCP server connection lifecycle** -- `chat()` now wraps its body in `async with self.mcp_client:`, keeping the connection alive for the entire call. Previously each `list_tools()` and `call_tool()` opened and closed a full connection cycle, restarting stdio server subprocesses on every operation.
 
 ### Added
 
@@ -17,6 +24,7 @@
 - **`SyntheticTool` protocol** for tools handled internally by casual-mcp (not forwarded to MCP servers). `SearchToolsTool` is the primary implementation.
 - **`BM25-based tool search index`** for relevance-ranked tool discovery across tool names and descriptions.
 - **`McpToolChat.from_config(config)`** classmethod that builds all dependencies (MCP client, tool cache, model factory, server names, tool discovery) from a single `Config` object.
+- **`McpToolChat` async context manager** -- `async with McpToolChat.from_config(config) as chat:` keeps MCP connections alive across multiple `chat()` calls, avoiding reconnection overhead between turns. Without it, each `chat()` call still manages its own connection automatically.
 - **Call-time model selection** -- pass `model="gpt-4.1"` or a `Model` instance to `chat()`. A single `McpToolChat` instance can serve multiple models.
 - **Call-time system prompt override** -- pass `system="..."` to `chat()` to override the default. Resolution order: explicit param > model template > constructor default.
 - **Discovery statistics** -- `ChatStats.discovery` tracks `search_calls` and `tools_discovered` when tool discovery is enabled.

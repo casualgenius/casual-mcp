@@ -152,13 +152,12 @@ from casual_llm import SystemMessage, UserMessage
 from casual_mcp import McpToolChat, load_config
 
 config = load_config("casual_mcp_config.json")
-chat = McpToolChat.from_config(config)
-
-messages = [
-    SystemMessage(content="You are a helpful assistant."),
-    UserMessage(content="What time is it?")
-]
-response = await chat.chat(messages, model="gpt-4.1")
+async with McpToolChat.from_config(config) as chat:
+    messages = [
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What time is it?")
+    ]
+    response = await chat.chat(messages, model="gpt-4.1")
 ```
 
 For full control you can still construct `McpToolChat` manually — see the [Programmatic Usage Guide](docs/programmatic-usage.md) for details on `from_config()`, model selection at call time, usage statistics, toolsets, and common patterns.

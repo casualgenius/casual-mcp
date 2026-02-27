@@ -50,6 +50,7 @@ casual-mcp tools                              # List available tools
 **`McpToolChat`** ([src/casual_mcp/mcp_tool_chat.py](src/casual_mcp/mcp_tool_chat.py))
 - Orchestrates LLM interaction with tools using a recursive loop
 - **`from_config(config)`** classmethod builds all dependencies from a `Config` object (recommended)
+- Supports `async with` for persistent MCP connections across multiple `chat()` calls
 - Model selection at call time: `chat(messages, model="gpt-4.1")`
 - System prompt resolved per-call: explicit `system` param > model template > constructor default
 - Constructor takes `(mcp_client, system, tool_cache, server_names, synthetic_tools, model_factory)` — no `model` or `config`
@@ -208,6 +209,7 @@ prompt-templates/              # Jinja2 templates for system prompts
 4. **Two-Tier Caching**: `ModelFactory` caches clients by name and models by name. Multiple models referencing the same client name reuse a single client connection.
 
 5. **Recursive Tool Calling Loop**: `McpToolChat.chat()` implements the agentic loop:
+   - Open the MCP client connection for the duration of the call (`async with self.mcp_client:`)
    - Resolve model (from `model` param, factory, or constructor default) and system prompt
    - Send messages + tools to LLM
    - LLM responds (possibly with tool calls)
@@ -222,6 +224,13 @@ prompt-templates/              # Jinja2 templates for system prompts
 8. **Tool Discovery**: When many MCP servers provide tools, the full tool list can overwhelm the LLM's context. Tool discovery partitions tools into loaded (eager) and deferred sets. Deferred tools are not sent to the LLM directly; instead, a synthetic `search-tools` tool is injected that lets the LLM search for and load tools on demand. See [Tool Discovery](#tool-discovery) below.
 
 9. **Synthetic Tool Protocol**: Internal tools that are handled by casual-mcp itself (not forwarded to MCP servers). The `SyntheticTool` protocol defines the interface; `SearchToolsTool` is the primary implementation. Synthetic tools are dispatched in the chat loop before MCP tool execution.
+
+10. **Connection Lifecycle**: FastMCP Client supports re-entrant `async with` via reference counting — nested context managers reuse the existing session. Three usage patterns:
+    - **Per-call (automatic)**: `chat()` wraps its body in `async with self.mcp_client:`, so each call manages its own connection. No setup needed.
+    - **Persistent (programmatic)**: `async with McpToolChat.from_config(config) as chat:` opens the connection once; all `chat()` calls reuse it via re-entrance.
+    - **Persistent (API server)**: The FastAPI lifespan wraps `async with state.chat_instance:`, keeping connections alive for the server's lifetime.
+
+    Inner `async with` blocks in `execute()` and `ToolCache.get_tools()` serve as safety nets for standalone calls; when called from within `chat()`, they are re-entrant no-ops.
 
 ## Tool Discovery
 

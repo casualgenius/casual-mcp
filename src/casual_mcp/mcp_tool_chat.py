@@ -83,6 +83,24 @@ class McpToolChat:
         self._config: Config | None = None
         self._tool_discovery_config: ToolDiscoveryConfig | None = None
 
+    async def __aenter__(self) -> "McpToolChat":
+        """Enter the async context: connect the MCP client.
+
+        When used as a context manager, the MCP client connection persists
+        across multiple ``chat()`` calls, avoiding reconnection overhead.
+        """
+        await self.mcp_client.__aenter__()  # type: ignore[no-untyped-call]
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        """Exit the async context: disconnect the MCP client."""
+        await self.mcp_client.__aexit__(exc_type, exc_val, exc_tb)  # type: ignore[no-untyped-call]
+
     def get_stats(self) -> ChatStats | None:
         """
         Get usage statistics from the last chat() call.
@@ -337,162 +355,173 @@ class McpToolChat:
         Returns:
             List of response messages including any tool calls and results
         """
-        # Work on a copy so we don't mutate the caller's list
-        messages = list(messages)
+        # Open the MCP client connection for the duration of this chat call.
+        # If the caller already opened a connection (via ``async with chat:``),
+        # this is a re-entrant no-op thanks to FastMCP's reference counting.
+        async with self.mcp_client:
+            # Work on a copy so we don't mutate the caller's list
+            messages = list(messages)
 
-        # Resolve model and system prompt for this call
-        resolved_model = self._resolve_model(model)
-        model_name = model if isinstance(model, str) else None
-        resolved_system = await self._resolve_system_prompt(system, model_name)
+            # Resolve model and system prompt for this call
+            resolved_model = self._resolve_model(model)
+            model_name = model if isinstance(model, str) else None
+            resolved_system = await self._resolve_system_prompt(system, model_name)
 
-        tools = await self.tool_cache.get_tools()
-        if tool_set is not None:
-            tools = filter_tools_by_toolset(tools, tool_set, self.server_names, validate=True)
-            logger.info(f"Filtered to {len(tools)} tools using toolset")
+            tools = await self.tool_cache.get_tools()
+            if tool_set is not None:
+                tools = filter_tools_by_toolset(tools, tool_set, self.server_names, validate=True)
+                logger.info(f"Filtered to {len(tools)} tools using toolset")
 
-        # Per-call stats (assigned to self._last_stats at the end)
-        stats = ChatStats()
+            # Per-call stats (assigned to self._last_stats at the end)
+            stats = ChatStats()
 
-        # Set up tool discovery (partitioning, search index, synthetic registry)
-        loaded_tools, deferred_tool_names, call_synthetic_registry, discovery_system_prompt = (
-            self._setup_discovery(tools, stats)
-        )
-
-        # Track the tool cache version for mid-session change detection
-        current_cache_version = self.tool_cache.version
-
-        # Add a system message if required
-        has_system_message = any(message.role == "system" for message in messages)
-        if resolved_system and not has_system_message:
-            logger.debug("Adding System Message")
-            messages.insert(0, SystemMessage(content=resolved_system))
-
-        # Inject the discovery manifest as a system message so the LLM knows
-        # which deferred tools are available via search-tools.  Placed after
-        # any existing system messages but before the first user message.
-        if discovery_system_prompt:
-            insert_idx = 0
-            for i, msg in enumerate(messages):
-                if msg.role == "system":
-                    insert_idx = i + 1
-                else:
-                    break
-            messages.insert(insert_idx, SystemMessage(content=discovery_system_prompt))
-
-        # Build combined tool list: MCP tools + synthetic tool definitions
-        # Cache the converted MCP tools to avoid reconversion every iteration
-        converted_mcp_tools = tools_from_mcp(loaded_tools)
-        synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
-
-        logger.info("Start Chat")
-        response_messages: list[ChatMessage] = []
-        for _iteration in range(DEFAULT_MAX_ITERATIONS):
-            # Check for tool cache version changes mid-session
-            if self._is_discovery_enabled() and self.tool_cache.version != current_cache_version:
-                logger.info("Tool cache version changed mid-session, rebuilding discovery index")
-                current_cache_version = self.tool_cache.version
-                (
-                    loaded_tools,
-                    deferred_tool_names,
-                    call_synthetic_registry,
-                    new_discovery_prompt,
-                ) = await self._rebuild_discovery_state(
-                    tool_set=tool_set,
-                    loaded_tools=loaded_tools,
-                    base_synthetic_registry=self._synthetic_registry,
-                )
-                converted_mcp_tools = tools_from_mcp(loaded_tools)
-                synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
-                # Replace the discovery system message if the manifest changed
-                if discovery_system_prompt or new_discovery_prompt:
-                    messages = [
-                        m
-                        for m in messages
-                        if not (
-                            m.role == "system"
-                            and hasattr(m, "content")
-                            and m.content == discovery_system_prompt
-                        )
-                    ]
-                    if new_discovery_prompt:
-                        insert_idx = 0
-                        for i, msg in enumerate(messages):
-                            if msg.role == "system":
-                                insert_idx = i + 1
-                            else:
-                                break
-                        messages.insert(insert_idx, SystemMessage(content=new_discovery_prompt))
-                    discovery_system_prompt = new_discovery_prompt
-
-            logger.info("Calling the LLM")
-            all_tools = converted_mcp_tools + synthetic_definitions
-            ai_message = await resolved_model.chat(
-                messages=messages, options=ChatOptions(tools=all_tools)
+            # Set up tool discovery (partitioning, search index, synthetic registry)
+            loaded_tools, deferred_tool_names, call_synthetic_registry, discovery_system_prompt = (
+                self._setup_discovery(tools, stats)
             )
 
-            # Accumulate token usage stats
-            stats.llm_calls += 1
-            usage = resolved_model.get_usage()
-            if usage:
-                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
-                completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-                stats.tokens.prompt_tokens += prompt_tokens
-                stats.tokens.completion_tokens += completion_tokens
+            # Track the tool cache version for mid-session change detection
+            current_cache_version = self.tool_cache.version
 
-            response_messages.append(ai_message)
-            messages.append(ai_message)
+            # Add a system message if required
+            has_system_message = any(message.role == "system" for message in messages)
+            if resolved_system and not has_system_message:
+                logger.debug("Adding System Message")
+                messages.insert(0, SystemMessage(content=resolved_system))
 
-            logger.debug(f"Assistant: {ai_message}")
-            if not ai_message.tool_calls:
-                break
+            # Inject the discovery manifest as a system message so the LLM knows
+            # which deferred tools are available via search-tools.  Placed after
+            # any existing system messages but before the first user message.
+            if discovery_system_prompt:
+                insert_idx = 0
+                for i, msg in enumerate(messages):
+                    if msg.role == "system":
+                        insert_idx = i + 1
+                    else:
+                        break
+                messages.insert(insert_idx, SystemMessage(content=discovery_system_prompt))
 
-            logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
+            # Build combined tool list: MCP tools + synthetic tool definitions
+            # Cache the converted MCP tools to avoid reconversion every iteration
+            converted_mcp_tools = tools_from_mcp(loaded_tools)
+            synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
 
-            # Execute tool calls concurrently, then apply results sequentially
-            call_results = await asyncio.gather(
-                *(
-                    self._execute_tool_call(
-                        tool_call,
-                        deferred_tool_names=deferred_tool_names,
-                        call_synthetic_registry=call_synthetic_registry,
-                        loaded_tools=loaded_tools,
-                        stats=stats,
-                        meta=meta,
+            logger.info("Start Chat")
+            response_messages: list[ChatMessage] = []
+            for _iteration in range(DEFAULT_MAX_ITERATIONS):
+                # Check for tool cache version changes mid-session
+                if (
+                    self._is_discovery_enabled()
+                    and self.tool_cache.version != current_cache_version
+                ):
+                    logger.info(
+                        "Tool cache version changed mid-session, rebuilding discovery index"
                     )
-                    for tool_call in ai_message.tool_calls
-                )
-            )
-
-            result_count = 0
-            for result, definitions_changed in call_results:
-                if definitions_changed:
+                    current_cache_version = self.tool_cache.version
+                    (
+                        loaded_tools,
+                        deferred_tool_names,
+                        call_synthetic_registry,
+                        new_discovery_prompt,
+                    ) = await self._rebuild_discovery_state(
+                        tool_set=tool_set,
+                        loaded_tools=loaded_tools,
+                        base_synthetic_registry=self._synthetic_registry,
+                    )
                     converted_mcp_tools = tools_from_mcp(loaded_tools)
                     synthetic_definitions = [
                         st.definition for st in call_synthetic_registry.values()
                     ]
-                if result:
-                    messages.append(result)
-                    response_messages.append(result)
-                    result_count += 1
+                    # Replace the discovery system message if the manifest changed
+                    if discovery_system_prompt or new_discovery_prompt:
+                        messages = [
+                            m
+                            for m in messages
+                            if not (
+                                m.role == "system"
+                                and hasattr(m, "content")
+                                and m.content == discovery_system_prompt
+                            )
+                        ]
+                        if new_discovery_prompt:
+                            insert_idx = 0
+                            for i, msg in enumerate(messages):
+                                if msg.role == "system":
+                                    insert_idx = i + 1
+                                else:
+                                    break
+                            messages.insert(insert_idx, SystemMessage(content=new_discovery_prompt))
+                        discovery_system_prompt = new_discovery_prompt
 
-            logger.info(f"Added {result_count} tool results")
+                logger.info("Calling the LLM")
+                all_tools = converted_mcp_tools + synthetic_definitions
+                ai_message = await resolved_model.chat(
+                    messages=messages, options=ChatOptions(tools=all_tools)
+                )
 
-        else:
-            # for-loop exhausted without breaking — the LLM never stopped calling tools
-            logger.error("Chat loop exceeded maximum iterations (%d)", DEFAULT_MAX_ITERATIONS)
+                # Accumulate token usage stats
+                stats.llm_calls += 1
+                usage = resolved_model.get_usage()
+                if usage:
+                    prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                    completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+                    stats.tokens.prompt_tokens += prompt_tokens
+                    stats.tokens.completion_tokens += completion_tokens
+
+                response_messages.append(ai_message)
+                messages.append(ai_message)
+
+                logger.debug(f"Assistant: {ai_message}")
+                if not ai_message.tool_calls:
+                    break
+
+                logger.info(f"Executing {len(ai_message.tool_calls)} tool calls")
+
+                # Execute tool calls concurrently, then apply results sequentially
+                call_results = await asyncio.gather(
+                    *(
+                        self._execute_tool_call(
+                            tool_call,
+                            deferred_tool_names=deferred_tool_names,
+                            call_synthetic_registry=call_synthetic_registry,
+                            loaded_tools=loaded_tools,
+                            stats=stats,
+                            meta=meta,
+                        )
+                        for tool_call in ai_message.tool_calls
+                    )
+                )
+
+                result_count = 0
+                for result, definitions_changed in call_results:
+                    if definitions_changed:
+                        converted_mcp_tools = tools_from_mcp(loaded_tools)
+                        synthetic_definitions = [
+                            st.definition for st in call_synthetic_registry.values()
+                        ]
+                    if result:
+                        messages.append(result)
+                        response_messages.append(result)
+                        result_count += 1
+
+                logger.info(f"Added {result_count} tool results")
+
+            else:
+                # for-loop exhausted without breaking — the LLM never stopped calling tools
+                logger.error("Chat loop exceeded maximum iterations (%d)", DEFAULT_MAX_ITERATIONS)
+                self._last_stats = stats
+                raise RuntimeError(
+                    f"Chat loop exceeded maximum {DEFAULT_MAX_ITERATIONS} iterations. "
+                    "The LLM may be stuck in a tool-calling loop. "
+                    "Set MCP_MAX_CHAT_ITERATIONS to adjust the limit."
+                )
+
+            logger.debug(f"Final Response: {response_messages[-1].content}")
+
+            # Publish stats so get_stats() returns the result of this call
             self._last_stats = stats
-            raise RuntimeError(
-                f"Chat loop exceeded maximum {DEFAULT_MAX_ITERATIONS} iterations. "
-                "The LLM may be stuck in a tool-calling loop. "
-                "Set MCP_MAX_CHAT_ITERATIONS to adjust the limit."
-            )
 
-        logger.debug(f"Final Response: {response_messages[-1].content}")
-
-        # Publish stats so get_stats() returns the result of this call
-        self._last_stats = stats
-
-        return response_messages
+            return response_messages
 
     async def _rebuild_discovery_state(
         self,

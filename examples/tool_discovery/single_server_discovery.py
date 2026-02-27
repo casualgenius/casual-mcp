@@ -57,65 +57,69 @@ async def main():
             print(f"  - {name}")
         return
 
-    chat = McpToolChat.from_config(config)
+    async with McpToolChat.from_config(config) as chat:
+        print(f"Model: {MODEL_NAME}")
 
-    print(f"Model: {MODEL_NAME}")
+        # Show the partition: which tools are loaded vs deferred
+        server_names = set(config.servers.keys())
+        all_tools = await chat.tool_cache.get_tools()
+        loaded, deferred_by_server = partition_tools(all_tools, config, server_names)
 
-    # Show the partition: which tools are loaded vs deferred
-    server_names = set(config.servers.keys())
-    all_tools = await chat.tool_cache.get_tools()
-    loaded, deferred_by_server = partition_tools(all_tools, config, server_names)
+        print(f"\nTotal tools: {len(all_tools)}")
+        print(f"Loaded (sent to LLM immediately): {len(loaded)}")
+        for tool in loaded:
+            print(f"  - {tool.name}")
 
-    print(f"\nTotal tools: {len(all_tools)}")
-    print(f"Loaded (sent to LLM immediately): {len(loaded)}")
-    for tool in loaded:
-        print(f"  - {tool.name}")
+        if deferred_by_server:
+            total_deferred = sum(len(t) for t in deferred_by_server.values())
+            print(f"Deferred (available via search-tools): {total_deferred}")
+            for server, tools in deferred_by_server.items():
+                print(f"  [{server}]")
+                for tool in tools:
+                    print(f"    - {tool.name}")
+        else:
+            print("\nNo deferred tools. Enable tool_discovery and set defer_loading")
+            print("on at least one server to see tool discovery in action.")
+            return
 
-    if deferred_by_server:
-        total_deferred = sum(len(t) for t in deferred_by_server.values())
-        print(f"Deferred (available via search-tools): {total_deferred}")
-        for server, tools in deferred_by_server.items():
-            print(f"  [{server}]")
-            for tool in tools:
-                print(f"    - {tool.name}")
-    else:
-        print("\nNo deferred tools. Enable tool_discovery and set defer_loading")
-        print("on at least one server to see tool discovery in action.")
-        await chat.mcp_client.close()
-        return
+        # The LLM will automatically use search-tools to find deferred tools
+        prompt = "What's the weather in Paris tomorrow?"
+        print(f"\nUser: {prompt}")
+        print("(The LLM should call search-tools to find weather tools, then use them)\n")
 
-    # The LLM will automatically use search-tools to find deferred tools
-    prompt = "What's the weather in Paris tomorrow?"
-    print(f"\nUser: {prompt}")
-    print("(The LLM should call search-tools to find weather tools, then use them)\n")
+        messages = [UserMessage(content=prompt)]
+        response_messages = await chat.chat(messages, model=MODEL_NAME)
 
-    messages = [UserMessage(content=prompt)]
-    response_messages = await chat.chat(messages, model=MODEL_NAME)
+        # Print the conversation flow to show tool discovery in action
+        for msg in response_messages:
+            if msg.role == "assistant":
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
+                if msg.content:
+                    print(f"\nAssistant: {msg.content}")
+            elif msg.role == "tool":
+                content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+                print(f"  Tool result ({msg.name}): {content}")
 
-    # Print the conversation flow to show tool discovery in action
-    for msg in response_messages:
-        if msg.role == "assistant":
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
-            if msg.content:
-                print(f"\nAssistant: {msg.content}")
-        elif msg.role == "tool":
-            content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
-            print(f"  Tool result ({msg.name}): {content}")
-
-    # Show discovery stats
-    stats = chat.get_stats()
-    if stats:
-        print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
-        if stats.discovery:
-            print(
-                f"Discovery: {stats.discovery.search_calls} search calls, "
-                f"{stats.discovery.tools_discovered} tools discovered"
-            )
-
-    await chat.mcp_client.close()
+        # Show discovery stats
+        stats = chat.get_stats()
+        if stats:
+            print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
+            if stats.discovery:
+                print(
+                    f"Discovery: {stats.discovery.search_calls} search calls, "
+                    f"{stats.discovery.tools_discovered} tools discovered"
+                )
 
 
 if __name__ == "__main__":
+    # Python <3.12: subprocess transport __del__ fires after the event loop
+    # closes, producing harmless "Event loop is closed" RuntimeErrors.
+    import sys
+
+    _orig_hook = sys.unraisablehook
+    sys.unraisablehook = lambda u: (
+        None if "Event loop is closed" in str(u.exc_value) else _orig_hook(u)
+    )
     asyncio.run(main())

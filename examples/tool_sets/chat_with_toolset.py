@@ -31,77 +31,84 @@ async def main():
             print(f"  - {name}")
         return
 
-    chat = McpToolChat.from_config(config)
+    async with McpToolChat.from_config(config) as chat:
+        print(f"Model: {MODEL_NAME}")
 
-    print(f"Model: {MODEL_NAME}")
+        # Show all available tools
+        all_tools = await chat.tool_cache.get_tools()
+        print(f"\nAll available tools ({len(all_tools)}):")
+        for tool in all_tools:
+            print(f"  - {tool.name}")
 
-    # Show all available tools
-    all_tools = await chat.tool_cache.get_tools()
-    print(f"\nAll available tools ({len(all_tools)}):")
-    for tool in all_tools:
-        print(f"  - {tool.name}")
+        # Option 1: Use a toolset defined in config (if available)
+        if config.tool_sets:
+            toolset_name = next(iter(config.tool_sets))
+            toolset = config.tool_sets[toolset_name]
+            print(f"\n--- Using toolset from config: '{toolset_name}' ---")
+            print(f"Description: {toolset.description}")
+            print(f"Servers: {list(toolset.servers.keys())}")
 
-    # Option 1: Use a toolset defined in config (if available)
-    if config.tool_sets:
-        toolset_name = next(iter(config.tool_sets))
-        toolset = config.tool_sets[toolset_name]
-        print(f"\n--- Using toolset from config: '{toolset_name}' ---")
-        print(f"Description: {toolset.description}")
-        print(f"Servers: {list(toolset.servers.keys())}")
+            prompt = "What time is it?"
+            print(f"\nUser: {prompt}")
 
-        prompt = "What time is it?"
-        print(f"\nUser: {prompt}")
+            messages = [UserMessage(content=prompt)]
+            response = await chat.chat(messages, model=MODEL_NAME, tool_set=toolset)
+            print(f"Assistant: {response[-1].content}")
 
-        messages = [UserMessage(content=prompt)]
-        response = await chat.chat(messages, model=MODEL_NAME, tool_set=toolset)
-        print(f"Assistant: {response[-1].content}")
+        # Option 2: Create a toolset programmatically
+        print("\n--- Using programmatic toolset ---")
 
-    # Option 2: Create a toolset programmatically
-    print("\n--- Using programmatic toolset ---")
-
-    # Create a toolset that only includes specific tools
-    custom_toolset = ToolSetConfig(
-        description="Math tools only",
-        servers={
-            "math": True,  # Include all tools from 'math' server
-        },
-    )
-
-    # Check if math server exists
-    if "math" in config.servers:
-        prompt = "What is 42 * 17?"
-        print(f"\nUser: {prompt}")
-        print(f"Toolset: {custom_toolset.description}")
-
-        messages = [UserMessage(content=prompt)]
-        response = await chat.chat(messages, model=MODEL_NAME, tool_set=custom_toolset)
-        print(f"Assistant: {response[-1].content}")
-
-        # Show stats
-        stats = chat.get_stats()
-        if stats:
-            print(f"\nStats: {stats.tool_calls.total} tool calls, {stats.llm_calls} LLM calls")
-    else:
-        print("Note: 'math' server not configured, skipping programmatic toolset example")
-
-    # Option 3: Toolset with exclusions
-    print("\n--- Using toolset with exclusions ---")
-
-    # Get first available server
-    if config.servers:
-        server_name = next(iter(config.servers))
-        exclude_toolset = ToolSetConfig(
-            description=f"All {server_name} tools except first one",
+        # Create a toolset that only includes specific tools
+        custom_toolset = ToolSetConfig(
+            description="Math tools only",
             servers={
-                server_name: ExcludeSpec(exclude=[]),  # All tools (empty exclude)
+                "math": True,  # Include all tools from 'math' server
             },
         )
-        print(f"Using server '{server_name}' with no exclusions")
-        print(f"Toolset servers: {list(exclude_toolset.servers.keys())}")
 
-    # Clean up
-    await chat.mcp_client.close()
+        # Check if math server exists
+        if "math" in config.servers:
+            prompt = "What is 42 * 17?"
+            print(f"\nUser: {prompt}")
+            print(f"Toolset: {custom_toolset.description}")
+
+            messages = [UserMessage(content=prompt)]
+            response = await chat.chat(messages, model=MODEL_NAME, tool_set=custom_toolset)
+            print(f"Assistant: {response[-1].content}")
+
+            # Show stats
+            stats = chat.get_stats()
+            if stats:
+                print(
+                    f"\nStats: {stats.tool_calls.total} tool calls, "
+                    f"{stats.llm_calls} LLM calls"
+                )
+        else:
+            print("Note: 'math' server not configured, skipping programmatic toolset example")
+
+        # Option 3: Toolset with exclusions
+        print("\n--- Using toolset with exclusions ---")
+
+        # Get first available server
+        if config.servers:
+            server_name = next(iter(config.servers))
+            exclude_toolset = ToolSetConfig(
+                description=f"All {server_name} tools except first one",
+                servers={
+                    server_name: ExcludeSpec(exclude=[]),  # All tools (empty exclude)
+                },
+            )
+            print(f"Using server '{server_name}' with no exclusions")
+            print(f"Toolset servers: {list(exclude_toolset.servers.keys())}")
 
 
 if __name__ == "__main__":
+    # Python <3.12: subprocess transport __del__ fires after the event loop
+    # closes, producing harmless "Event loop is closed" RuntimeErrors.
+    import sys
+
+    _orig_hook = sys.unraisablehook
+    sys.unraisablehook = lambda u: (
+        None if "Event loop is closed" in str(u.exc_value) else _orig_hook(u)
+    )
     asyncio.run(main())

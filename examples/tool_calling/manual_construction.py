@@ -51,47 +51,53 @@ async def main():
         model_factory=model_factory,
     )
 
-    print(f"Model: {MODEL_NAME}")
+    async with chat:
+        print(f"Model: {MODEL_NAME}")
 
-    tools = await tool_cache.get_tools()
-    print(f"Available tools: {len(tools)}")
+        tools = await tool_cache.get_tools()
+        print(f"Available tools: {len(tools)}")
 
-    # Option A: Pass model name — resolved via model_factory
-    messages = [UserMessage(content="What is 42 + 17?")]
-    print("\nUser: What is 42 + 17?")
+        # Option A: Pass model name — resolved via model_factory
+        messages = [UserMessage(content="What is 42 + 17?")]
+        print("\nUser: What is 42 + 17?")
 
-    response_messages = await chat.chat(messages, model=MODEL_NAME)
+        response_messages = await chat.chat(messages, model=MODEL_NAME)
 
-    for msg in reversed(response_messages):
-        if msg.role == "assistant" and msg.content:
-            print(f"Assistant: {msg.content}")
-            break
+        for msg in reversed(response_messages):
+            if msg.role == "assistant" and msg.content:
+                print(f"Assistant: {msg.content}")
+                break
 
-    # Option B: Pass a pre-built Model instance directly
-    llm_model = model_factory.get_model(MODEL_NAME)
+        # Option B: Pass a pre-built Model instance directly
+        llm_model = model_factory.get_model(MODEL_NAME)
 
-    messages = [
-        SystemMessage(content="You are a weather expert."),
-        UserMessage(content="What's the weather in London?"),
-    ]
+        messages = [
+            SystemMessage(content="You are a weather expert."),
+            UserMessage(content="What's the weather in London?"),
+        ]
 
-    print("\nUser: What's the weather in London?")
+        print("\nUser: What's the weather in London?")
 
-    response_messages = await chat.chat(messages, model=llm_model)
+        response_messages = await chat.chat(messages, model=llm_model)
 
-    for msg in reversed(response_messages):
-        if msg.role == "assistant" and msg.content:
-            print(f"Assistant: {msg.content}")
-            break
+        for msg in reversed(response_messages):
+            if msg.role == "assistant" and msg.content:
+                print(f"Assistant: {msg.content}")
+                break
 
-    # Show stats
-    stats = chat.get_stats()
-    if stats:
-        print(f"\nStats: {stats.tool_calls.total} tool calls, {stats.llm_calls} LLM calls")
-
-    # Clean up MCP client connections
-    await mcp_client.close()
+        # Show stats
+        stats = chat.get_stats()
+        if stats:
+            print(f"\nStats: {stats.tool_calls.total} tool calls, {stats.llm_calls} LLM calls")
 
 
 if __name__ == "__main__":
+    # Python <3.12: subprocess transport __del__ fires after the event loop
+    # closes, producing harmless "Event loop is closed" RuntimeErrors.
+    import sys
+
+    _orig_hook = sys.unraisablehook
+    sys.unraisablehook = lambda u: (
+        None if "Event loop is closed" in str(u.exc_value) else _orig_hook(u)
+    )
     asyncio.run(main())
