@@ -405,10 +405,15 @@ class McpToolChat:
                 synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
                 # Replace the discovery system message if the manifest changed
                 if discovery_system_prompt or new_discovery_prompt:
-                    messages = [m for m in messages if not (
-                        m.role == "system" and hasattr(m, "content")
-                        and m.content == discovery_system_prompt
-                    )]
+                    messages = [
+                        m
+                        for m in messages
+                        if not (
+                            m.role == "system"
+                            and hasattr(m, "content")
+                            and m.content == discovery_system_prompt
+                        )
+                    ]
                     if new_discovery_prompt:
                         insert_idx = 0
                         for i, msg in enumerate(messages):
@@ -421,7 +426,9 @@ class McpToolChat:
 
             logger.info("Calling the LLM")
             all_tools = converted_mcp_tools + synthetic_definitions
-            ai_message = await resolved_model.chat(messages=messages, options=ChatOptions(tools=all_tools))
+            ai_message = await resolved_model.chat(
+                messages=messages, options=ChatOptions(tools=all_tools)
+            )
 
             # Accumulate token usage stats
             stats.llm_calls += 1
