@@ -480,6 +480,7 @@ class McpToolChat:
         else:
             # for-loop exhausted without breaking — the LLM never stopped calling tools
             logger.error("Chat loop exceeded maximum iterations (%d)", DEFAULT_MAX_ITERATIONS)
+            self._last_stats = stats
             raise RuntimeError(
                 f"Chat loop exceeded maximum {DEFAULT_MAX_ITERATIONS} iterations. "
                 "The LLM may be stuck in a tool-calling loop. "
