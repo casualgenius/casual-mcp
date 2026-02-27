@@ -217,7 +217,7 @@ class TestModelFactory:
         factory.get_model("test")
 
         call_args = mock_create_model.call_args
-        assert call_args[0][1].temperature == 0.7
+        assert call_args[0][1].default_options.temperature == 0.7
 
     @patch("casual_mcp.model_factory.create_model")
     @patch("casual_mcp.model_factory.create_client")

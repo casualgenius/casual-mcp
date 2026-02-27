@@ -328,7 +328,7 @@ class TestChatLoopWithDiscovery:
 
         # Check that the model was called with search-tools in the tool list
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" in tool_names
         assert "math_add" in tool_names
         # weather_get should NOT be in the tool list (it's deferred)
@@ -352,7 +352,7 @@ class TestChatLoopWithDiscovery:
         await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" not in tool_names
         assert "math_add" in tool_names
 
@@ -375,10 +375,64 @@ class TestChatLoopWithDiscovery:
         await chat.chat([UserMessage(content="Hi")], model=mock_model)
 
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" not in tool_names
         # All tools should be loaded (discovery disabled)
         assert "weather_get" in tool_names
+
+    async def test_discovery_system_message_injected_when_deferred_exist(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """A system message with the manifest should be injected for deferred tools."""
+        tools = [
+            _make_tool("math_add", "Add two numbers"),
+            _make_tool("weather_get", "Get weather"),
+        ]
+
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
+
+        chat = self._make_chat_with_discovery(
+            mock_client,
+            mock_model,
+            tools,
+            {"math", "weather"},
+            servers={
+                "math": {"defer_loading": False},
+                "weather": {"defer_loading": True},
+            },
+        )
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
+
+        call_kwargs = mock_model.chat.call_args[1]
+        system_messages = [m for m in call_kwargs["messages"] if m.role == "system"]
+        # Should have the default system prompt AND the discovery manifest
+        assert len(system_messages) == 2
+        discovery_msg = system_messages[1]
+        assert "search-tools" in discovery_msg.content
+        assert "weather" in discovery_msg.content
+
+    async def test_no_discovery_system_message_when_no_deferred(
+        self, mock_client: AsyncMock, mock_model: AsyncMock
+    ) -> None:
+        """No discovery system message when all tools are loaded."""
+        tools = [_make_tool("math_add", "Add")]
+
+        mock_model.chat = AsyncMock(return_value=AssistantMessage(content="Hello"))
+
+        chat = self._make_chat_with_discovery(
+            mock_client,
+            mock_model,
+            tools,
+            {"math"},
+            servers={"math": {"defer_loading": False}},
+        )
+        await chat.chat([UserMessage(content="Hi")], model=mock_model)
+
+        call_kwargs = mock_model.chat.call_args[1]
+        system_messages = [m for m in call_kwargs["messages"] if m.role == "system"]
+        # Only the default system prompt, no discovery message
+        assert len(system_messages) == 1
+        assert "search-tools" not in system_messages[0].content
 
 
 class TestDiscoverAndUseFlow:
@@ -486,7 +540,7 @@ class TestDiscoverAndUseFlow:
         mock_client.call_tool.assert_called_once()
 
         # After search, the second model.chat call should include weather_get_forecast
-        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_tools = mock_model.chat.call_args_list[1][1]["options"].tools
         second_call_tool_names = {t.name for t in second_call_tools}
         assert "weather_get_forecast" in second_call_tool_names
         assert "math_add" in second_call_tool_names
@@ -546,12 +600,12 @@ class TestDiscoverAndUseFlow:
         await chat.chat([UserMessage(content="Test")], model=mock_model)
 
         # After first search, forecast should be loaded
-        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_tools = mock_model.chat.call_args_list[1][1]["options"].tools
         second_tool_names = {t.name for t in second_call_tools}
         assert "weather_get_forecast" in second_tool_names
 
         # After second search, current should also be loaded
-        third_call_tools = mock_model.chat.call_args_list[2][1]["tools"]
+        third_call_tools = mock_model.chat.call_args_list[2][1]["options"].tools
         third_tool_names = {t.name for t in third_call_tools}
         assert "weather_get_forecast" in third_tool_names
         assert "weather_get_current" in third_tool_names
@@ -789,7 +843,7 @@ class TestToolCacheVersionChange:
         # - weather_get (previously discovered, kept across rebuild)
         # - search-tools (weather_alert is still deferred)
         # - weather_alert should NOT be in tool list (still deferred)
-        third_call_tools = mock_model.chat.call_args_list[2][1]["tools"]
+        third_call_tools = mock_model.chat.call_args_list[2][1]["options"].tools
         third_call_names = {t.name for t in third_call_tools}
         assert "math_add" in third_call_names, "Eagerly loaded tool should survive rebuild"
         assert "weather_get" in third_call_names, (
@@ -867,7 +921,7 @@ class TestToolCacheVersionChange:
         # weather_get is now in previously_loaded_names and will be kept in loaded.
         # Since it was the only deferred tool, no deferred remain -> search-tools removed.
         # The second call (call_count=2) should show weather_get but no search-tools
-        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_tools = mock_model.chat.call_args_list[1][1]["options"].tools
         second_call_names = {t.name for t in second_call_tools}
         assert "weather_get" in second_call_names
         assert "search-tools" in second_call_names  # Still present before rebuild
@@ -926,7 +980,7 @@ class TestToolsetFilteringWithDiscovery:
 
         # Only math_add should be in tools (weather excluded by toolset)
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "math_add" in tool_names
         # search-tools should NOT be present (no deferred tools after filtering)
         assert "search-tools" not in tool_names
@@ -1153,7 +1207,7 @@ class TestDeferAllMode:
 
         # Only search-tools should be in the tool list
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" in tool_names
         assert "math_add" not in tool_names
         assert "weather_get" not in tool_names
@@ -1202,7 +1256,7 @@ class TestEdgeCases:
 
         # No tools available at all -> no search-tools injected
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" not in tool_names
         assert len(response) == 1
 
@@ -1252,7 +1306,7 @@ class TestEdgeCases:
 
         # After no results, the second model call should still NOT include
         # weather_get (it was never discovered)
-        second_call_tools = mock_model.chat.call_args_list[1][1]["tools"]
+        second_call_tools = mock_model.chat.call_args_list[1][1]["options"].tools
         second_call_names = {t.name for t in second_call_tools}
         assert "weather_get" not in second_call_names
         assert "search-tools" in second_call_names
@@ -1299,7 +1353,7 @@ class TestEdgeCases:
 
         # Both search-tools and my_custom_tool should be available
         call_kwargs = mock_model.chat.call_args[1]
-        tool_names = {t.name for t in call_kwargs["tools"]}
+        tool_names = {t.name for t in call_kwargs["options"].tools}
         assert "search-tools" in tool_names
         assert "my_custom_tool" in tool_names
         assert "weather_get" not in tool_names  # deferred

@@ -1,4 +1,5 @@
 from casual_llm import (
+    ChatOptions,
     ClientConfig,
     LLMClient,
     Model,
@@ -70,7 +71,7 @@ class ModelFactory:
             client,
             ModelConfig(
                 name=model_config.model,
-                temperature=model_config.temperature,
+                default_options=ChatOptions(temperature=model_config.temperature),
             ),
         )
 

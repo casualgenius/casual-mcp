@@ -199,16 +199,13 @@ class SearchToolsTool:
     def definition(self) -> Tool:
         """The casual-llm Tool definition sent to the LLM.
 
-        The description includes the full manifest of deferred servers/tools
-        so the LLM can formulate appropriate search queries.
+        The description is kept short to maximise compatibility across models.
+        The full manifest of deferred servers/tools is provided separately via
+        the ``system_prompt`` property and injected as a system message.
         """
         description = (
-            "Search for and load additional tools that are available but not yet loaded.\n"
-            "Use this tool to discover tools you need to complete a task.\n"
-            "\n"
-            "Available tool servers:\n"
-            f"{self._manifest}\n"
-            "\n"
+            "Search for and load additional tools that are available but not yet loaded. "
+            "Use this tool to discover tools you need to complete a task. "
             "Provide at least one of: query, server_name, or tool_names."
         )
         return Tool.from_input_schema(
@@ -238,6 +235,37 @@ class SearchToolsTool:
                 },
                 "required": [],
             },
+        )
+
+    @property
+    def system_prompt(self) -> str:
+        """System prompt fragment describing deferred tools available for discovery.
+
+        Intended to be injected as a ``SystemMessage`` so the LLM knows which
+        tools can be loaded via ``search-tools`` without cluttering the tool
+        definition itself (which confuses smaller models).
+
+        Uses a deliberately minimal format (server names + tool names only,
+        no descriptions) to avoid confusing weaker models into attempting to
+        call the listed tools directly.
+        """
+        lines: list[str] = []
+        for server_name in sorted(self._deferred_by_server):
+            tools = self._deferred_by_server[server_name]
+            tool_names = ", ".join(t.name for t in tools)
+            tool_word = "tool" if len(tools) == 1 else "tools"
+            lines.append(f"- {server_name} ({len(tools)} {tool_word}): {tool_names}")
+
+        manifest = "\n".join(lines)
+        return (
+            "You have access to a search-tools function that lets you discover "
+            "and load additional tools.\n"
+            "\n"
+            "Available tool servers you can search:\n"
+            f"{manifest}\n"
+            "\n"
+            "To use any of these tools, first call the search-tools function "
+            "to load them, then call the loaded tools normally."
         )
 
     def _resolve_tools(

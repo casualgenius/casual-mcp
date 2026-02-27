@@ -193,7 +193,7 @@ class TestMcpToolChatSyntheticTools:
         assert response[0].content == "Response"
         # model.chat should be called with empty tool list (no MCP tools, no synthetic)
         call_kwargs = mock_model.chat.call_args[1]
-        assert call_kwargs["tools"] == []
+        assert call_kwargs["options"].tools == []
 
     async def test_synthetic_tool_definitions_included_in_model_chat(
         self, mock_client: AsyncMock, mock_model: AsyncMock, mock_tool_cache: Mock
@@ -207,7 +207,7 @@ class TestMcpToolChatSyntheticTools:
 
         # Check the tools passed to model.chat
         call_kwargs = mock_model.chat.call_args[1]
-        tools = call_kwargs["tools"]
+        tools = call_kwargs["options"].tools
         assert len(tools) == 1
         assert tools[0].name == "search-tools"
 
@@ -230,7 +230,7 @@ class TestMcpToolChatSyntheticTools:
 
         # Should have both MCP and synthetic tools
         call_kwargs = mock_model.chat.call_args[1]
-        tools = call_kwargs["tools"]
+        tools = call_kwargs["options"].tools
         assert len(tools) == 2
         tool_names = {t.name for t in tools}
         assert "mcp_calculator" in tool_names

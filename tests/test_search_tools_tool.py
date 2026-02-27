@@ -379,15 +379,23 @@ class TestSearchToolsToolProtocol:
         defn = search_tool.definition
         assert defn.required == []
 
-    def test_manifest_embedded_in_description(self, search_tool: SearchToolsTool) -> None:
+    def test_manifest_not_in_description(self, search_tool: SearchToolsTool) -> None:
+        """Manifest should live in system_prompt, not the tool description."""
         defn = search_tool.definition
-        assert "math (2 tools):" in defn.description
-        assert "weather (2 tools):" in defn.description
+        assert "math (2 tools):" not in defn.description
+        assert "weather (2 tools):" not in defn.description
 
-    def test_valid_server_names_in_description(self, search_tool: SearchToolsTool) -> None:
+    def test_valid_server_names_in_server_name_param(self, search_tool: SearchToolsTool) -> None:
         defn = search_tool.definition
-        assert "math" in defn.description
-        assert "weather" in defn.description
+        param_desc = defn.parameters["server_name"].description
+        assert "math" in param_desc
+        assert "weather" in param_desc
+
+    def test_system_prompt_contains_manifest(self, search_tool: SearchToolsTool) -> None:
+        prompt = search_tool.system_prompt
+        assert "math (2 tools):" in prompt
+        assert "weather (2 tools):" in prompt
+        assert "search-tools" in prompt
 
 
 # ===========================================================================

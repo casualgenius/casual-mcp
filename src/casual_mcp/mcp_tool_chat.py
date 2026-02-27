@@ -7,6 +7,7 @@ from typing import Any
 from casual_llm import (
     AssistantToolCall,
     ChatMessage,
+    ChatOptions,
     Model,
     SystemMessage,
     ToolResultMessage,
@@ -191,18 +192,20 @@ class McpToolChat:
         self,
         tools: list[mcp.Tool],
         stats: ChatStats,
-    ) -> tuple[list[mcp.Tool], set[str], dict[str, SyntheticTool]]:
+    ) -> tuple[list[mcp.Tool], set[str], dict[str, SyntheticTool], str | None]:
         """Partition tools and build discovery state for a chat call.
 
         Returns:
-            Tuple of (loaded_tools, deferred_tool_names, call_synthetic_registry).
+            Tuple of (loaded_tools, deferred_tool_names, call_synthetic_registry,
+            discovery_system_prompt).  The system prompt is ``None`` when there
+            are no deferred tools or discovery is disabled.
         """
         call_synthetic_registry = dict(self._synthetic_registry)
         deferred_tool_names: set[str] = set()
         loaded_tools: list[mcp.Tool] = list(tools)
 
         if not self._is_discovery_enabled():
-            return loaded_tools, deferred_tool_names, call_synthetic_registry
+            return loaded_tools, deferred_tool_names, call_synthetic_registry, None
 
         if self._config is None or self._tool_discovery_config is None:
             raise RuntimeError(
@@ -213,6 +216,8 @@ class McpToolChat:
         stats.discovery = DiscoveryStats()
 
         loaded_tools, deferred_by_server = partition_tools(tools, self._config, self.server_names)
+
+        discovery_system_prompt: str | None = None
 
         if deferred_by_server:
             for server_tools in deferred_by_server.values():
@@ -232,6 +237,7 @@ class McpToolChat:
                 config=self._tool_discovery_config,
             )
             call_synthetic_registry[search_tools_tool.name] = search_tools_tool
+            discovery_system_prompt = search_tools_tool.system_prompt
 
             logger.info(
                 f"Tool discovery enabled: {len(loaded_tools)} loaded, "
@@ -240,7 +246,7 @@ class McpToolChat:
         else:
             logger.debug("Tool discovery enabled but no deferred tools - search-tools not injected")
 
-        return loaded_tools, deferred_tool_names, call_synthetic_registry
+        return loaded_tools, deferred_tool_names, call_synthetic_registry, discovery_system_prompt
 
     async def _execute_tool_call(
         self,
@@ -348,8 +354,8 @@ class McpToolChat:
         stats = ChatStats()
 
         # Set up tool discovery (partitioning, search index, synthetic registry)
-        loaded_tools, deferred_tool_names, call_synthetic_registry = self._setup_discovery(
-            tools, stats
+        loaded_tools, deferred_tool_names, call_synthetic_registry, discovery_system_prompt = (
+            self._setup_discovery(tools, stats)
         )
 
         # Track the tool cache version for mid-session change detection
@@ -360,6 +366,18 @@ class McpToolChat:
         if resolved_system and not has_system_message:
             logger.debug("Adding System Message")
             messages.insert(0, SystemMessage(content=resolved_system))
+
+        # Inject the discovery manifest as a system message so the LLM knows
+        # which deferred tools are available via search-tools.  Placed after
+        # any existing system messages but before the first user message.
+        if discovery_system_prompt:
+            insert_idx = 0
+            for i, msg in enumerate(messages):
+                if msg.role == "system":
+                    insert_idx = i + 1
+                else:
+                    break
+            messages.insert(insert_idx, SystemMessage(content=discovery_system_prompt))
 
         # Build combined tool list: MCP tools + synthetic tool definitions
         # Cache the converted MCP tools to avoid reconversion every iteration
@@ -377,6 +395,7 @@ class McpToolChat:
                     loaded_tools,
                     deferred_tool_names,
                     call_synthetic_registry,
+                    new_discovery_prompt,
                 ) = await self._rebuild_discovery_state(
                     tool_set=tool_set,
                     loaded_tools=loaded_tools,
@@ -384,10 +403,25 @@ class McpToolChat:
                 )
                 converted_mcp_tools = tools_from_mcp(loaded_tools)
                 synthetic_definitions = [st.definition for st in call_synthetic_registry.values()]
+                # Replace the discovery system message if the manifest changed
+                if discovery_system_prompt or new_discovery_prompt:
+                    messages = [m for m in messages if not (
+                        m.role == "system" and hasattr(m, "content")
+                        and m.content == discovery_system_prompt
+                    )]
+                    if new_discovery_prompt:
+                        insert_idx = 0
+                        for i, msg in enumerate(messages):
+                            if msg.role == "system":
+                                insert_idx = i + 1
+                            else:
+                                break
+                        messages.insert(insert_idx, SystemMessage(content=new_discovery_prompt))
+                    discovery_system_prompt = new_discovery_prompt
 
             logger.info("Calling the LLM")
             all_tools = converted_mcp_tools + synthetic_definitions
-            ai_message = await resolved_model.chat(messages=messages, tools=all_tools)
+            ai_message = await resolved_model.chat(messages=messages, options=ChatOptions(tools=all_tools))
 
             # Accumulate token usage stats
             stats.llm_calls += 1
@@ -457,7 +491,7 @@ class McpToolChat:
         tool_set: ToolSetConfig | None,
         loaded_tools: list[mcp.Tool],
         base_synthetic_registry: dict[str, SyntheticTool],
-    ) -> tuple[list[mcp.Tool], set[str], dict[str, SyntheticTool]]:
+    ) -> tuple[list[mcp.Tool], set[str], dict[str, SyntheticTool], str | None]:
         """Rebuild tool discovery state after a tool cache version change.
 
         Fetches fresh tools, re-partitions, and rebuilds the search index
@@ -471,7 +505,8 @@ class McpToolChat:
                 (excludes per-call search-tools).
 
         Returns:
-            Tuple of (new_loaded_tools, new_deferred_names, new_call_registry).
+            Tuple of (new_loaded_tools, new_deferred_names, new_call_registry,
+            discovery_system_prompt).
         """
         if self._config is None or self._tool_discovery_config is None:
             raise RuntimeError(
@@ -515,6 +550,7 @@ class McpToolChat:
 
         # Build new call registry
         new_call_registry = dict(base_synthetic_registry)
+        new_discovery_prompt: str | None = None
 
         if deferred_by_server:
             all_deferred = [t for server_tools in deferred_by_server.values() for t in server_tools]
@@ -528,11 +564,12 @@ class McpToolChat:
                 config=self._tool_discovery_config,
             )
             new_call_registry[search_tools_tool.name] = search_tools_tool
+            new_discovery_prompt = search_tools_tool.system_prompt
             logger.info(
                 f"Rebuilt discovery: {len(new_loaded)} loaded, {len(new_deferred_names)} deferred"
             )
 
-        return new_loaded, new_deferred_names, new_call_registry
+        return new_loaded, new_deferred_names, new_call_registry, new_discovery_prompt
 
     async def _execute_synthetic_with_expansion(
         self,
