@@ -1,4 +1,6 @@
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from casual_llm import ChatMessage
@@ -8,11 +10,10 @@ from pydantic import BaseModel, Field
 
 from casual_mcp import McpToolChat
 from casual_mcp.logging import configure_logging, get_logger
+from casual_mcp.models.config import Config
 from casual_mcp.models.toolset_config import ToolSetConfig
-from casual_mcp.model_factory import ModelFactory
-from casual_mcp.tool_cache import ToolCache
 from casual_mcp.tool_filter import ToolSetValidationError
-from casual_mcp.utils import load_config, load_mcp_client, render_system_prompt
+from casual_mcp.utils import load_config
 
 # Load environment variables
 load_dotenv()
@@ -20,13 +21,6 @@ load_dotenv()
 # Configure logging
 configure_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = get_logger("main")
-
-config = load_config("casual_mcp_config.json")
-mcp_client = load_mcp_client(config)
-tool_cache = ToolCache(mcp_client)
-model_factory = ModelFactory(config)
-
-app = FastAPI()
 
 default_system_prompt = """You are a helpful assistant.
 
@@ -42,13 +36,27 @@ Always present information as current and factual.
 """
 
 
-class GenerateRequest(BaseModel):
-    session_id: str | None = Field(default=None, title="Session to use")
-    model: str = Field(title="Model to use")
-    system_prompt: str | None = Field(default=None, title="System Prompt to use")
-    prompt: str = Field(title="User Prompt")
-    include_stats: bool = Field(default=False, title="Include usage statistics in response")
-    tool_set: str | None = Field(default=None, title="Name of toolset to use")
+class AppState:
+    """Holds application-wide state initialised during the lifespan."""
+
+    config: Config
+    chat_instance: McpToolChat
+
+
+state = AppState()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialise shared resources on startup; clean up on shutdown."""
+    state.config = load_config("casual_mcp_config.json")
+    state.chat_instance = McpToolChat.from_config(state.config, system=default_system_prompt)
+    logger.info("Application started")
+    yield
+    logger.info("Application shut down")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -74,30 +82,39 @@ def resolve_tool_set(tool_set_name: str | None) -> ToolSetConfig | None:
     if tool_set_name is None:
         return None
 
-    if tool_set_name not in config.tool_sets:
+    if tool_set_name not in state.config.tool_sets:
         raise HTTPException(
             status_code=400,
             detail=f"Toolset '{tool_set_name}' not found. "
-            f"Available: {list(config.tool_sets.keys())}",
+            f"Available: {list(state.config.tool_sets.keys())}",
         )
 
-    return config.tool_sets[tool_set_name]
+    return state.config.tool_sets[tool_set_name]
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> dict[str, Any]:
     tool_set_config = resolve_tool_set(req.tool_set)
-    chat_instance = await get_chat(req.model, req.system_prompt)
 
     try:
-        messages = await chat_instance.chat(req.messages, tool_set=tool_set_config)
+        messages = await state.chat_instance.chat(
+            req.messages,
+            tool_set=tool_set_config,
+            model=req.model,
+            system=req.system_prompt,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except ToolSetValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in /chat: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not messages:
         error_result: dict[str, Any] = {"messages": [], "response": ""}
         if req.include_stats:
-            error_result["stats"] = chat_instance.get_stats()
+            error_result["stats"] = state.chat_instance.get_stats()
         raise HTTPException(
             status_code=500,
             detail={"error": "No response generated", **error_result},
@@ -105,44 +122,8 @@ async def chat(req: ChatRequest) -> dict[str, Any]:
 
     result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
     if req.include_stats:
-        result["stats"] = chat_instance.get_stats()
+        result["stats"] = state.chat_instance.get_stats()
     return result
-
-
-@app.post("/generate")
-async def generate(req: GenerateRequest) -> dict[str, Any]:
-    tool_set_config = resolve_tool_set(req.tool_set)
-    chat_instance = await get_chat(req.model, req.system_prompt)
-
-    try:
-        messages = await chat_instance.generate(
-            req.prompt, req.session_id, tool_set=tool_set_config
-        )
-    except ToolSetValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if not messages:
-        error_result: dict[str, Any] = {"messages": [], "response": ""}
-        if req.include_stats:
-            error_result["stats"] = chat_instance.get_stats()
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "No response generated", **error_result},
-        )
-
-    result: dict[str, Any] = {"messages": messages, "response": messages[-1].content}
-    if req.include_stats:
-        result["stats"] = chat_instance.get_stats()
-    return result
-
-
-@app.get("/generate/session/{session_id}")
-async def get_generate_session(session_id: str) -> list[ChatMessage]:
-    session = McpToolChat.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return session
 
 
 @app.get("/toolsets")
@@ -153,32 +134,5 @@ async def list_toolsets() -> dict[str, dict[str, Any]]:
             "description": ts.description,
             "servers": list(ts.servers.keys()),
         }
-        for name, ts in config.tool_sets.items()
+        for name, ts in state.config.tool_sets.items()
     }
-
-
-async def get_chat(model: str, system: str | None = None) -> McpToolChat:
-    # Get Model from Model Config
-    model_config = config.models.get(model)
-    if model_config is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{model}' not found. Available: {list(config.models.keys())}",
-        )
-    llm_model = model_factory.get_model(model)
-
-    # Get the system prompt
-    if not system:
-        if model_config.template:
-            tools = await tool_cache.get_tools()
-            system = render_system_prompt(f"{model_config.template}.j2", tools)
-        else:
-            system = default_system_prompt
-
-    return McpToolChat(
-        mcp_client,
-        llm_model,
-        system,
-        tool_cache=tool_cache,
-        server_names=set(config.servers.keys()),
-    )

@@ -11,3 +11,7 @@ wheels/
 
 .env
 .coverage
+.prd-to-feature
+.full-review
+
+SECURITY_AUDIT.md

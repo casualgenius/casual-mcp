@@ -11,6 +11,7 @@
 - OpenAI, Ollama, and Anthropic provider support (via [casual-llm](https://github.com/AlexStansfield/casual-llm))
 - Recursive tool-calling chat loop
 - Toolsets for selective tool filtering per request
+- **Tool discovery** -- defer tool loading and let the LLM search for tools on demand via BM25
 - Usage statistics tracking (tokens, tool calls, LLM calls)
 - System prompt templating with Jinja2
 - CLI and API interfaces
@@ -58,9 +59,9 @@ uv sync --group dev
 4. Make a request:
 
 ```bash
-curl -X POST http://localhost:8000/generate \
+curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4.1", "prompt": "What time is it?"}'
+  -d '{"model": "gpt-4.1", "messages": [{"role": "user", "content": "What time is it?"}]}'
 ```
 
 ## Configuration
@@ -87,6 +88,40 @@ Configure clients, models, MCP servers, and toolsets in `casual_mcp_config.json`
 
 See [Configuration Guide](docs/configuration.md) for full details on models, servers, toolsets, and templates.
 
+## Tool Discovery
+
+When connecting many MCP servers, the combined tool definitions can consume significant context and degrade tool selection accuracy. Tool discovery solves this by deferring tool loading -- instead of sending all tools to the LLM on every call, deferred tools are made available through a `search-tools` meta-tool that the LLM can invoke on demand.
+
+Add `tool_discovery` to your config and mark servers with `defer_loading`:
+
+```json
+{
+  "servers": {
+    "core-tools": { "command": "python", "args": ["servers/core.py"] },
+    "research-tools": {
+      "command": "python",
+      "args": ["servers/research.py"],
+      "defer_loading": true
+    }
+  },
+  "tool_discovery": {
+    "enabled": true,
+    "defer_all": false,
+    "max_search_results": 5
+  }
+}
+```
+
+How it works:
+
+1. Tools from servers with `defer_loading: true` are held back from the LLM
+2. A `search-tools` tool is injected with a compressed manifest of available servers and tools
+3. The LLM calls `search-tools` with a keyword query, server name, or exact tool names
+4. Matched tools are loaded into the active set for the remainder of the conversation
+5. Set `defer_all: true` to defer all servers without marking each individually
+
+The CLI `tools` command shows which tools are loaded vs deferred when discovery is enabled. Stats include `search_calls` and `tools_discovered` counts.
+
 ## CLI
 
 ```bash
@@ -106,8 +141,6 @@ See [CLI & API Reference](docs/cli-api.md) for all commands and options.
 | Endpoint | Description |
 |----------|-------------|
 | `POST /chat` | Send message history |
-| `POST /generate` | Send prompt with optional session |
-| `GET /generate/session/{id}` | Get session messages |
 | `GET /toolsets` | List available toolsets |
 
 See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response formats.
@@ -116,23 +149,36 @@ See [CLI & API Reference](docs/cli-api.md#api-endpoints) for request/response fo
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, load_config
 
 config = load_config("casual_mcp_config.json")
-mcp_client = load_mcp_client(config)
+chat = McpToolChat.from_config(config)
 
-model_factory = ModelFactory(config)
-llm_model = model_factory.get_model("gpt-4.1")
-
-chat = McpToolChat(mcp_client, llm_model)
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it?")
 ]
-response = await chat.chat(messages)
+response = await chat.chat(messages, model="gpt-4.1")
 ```
 
-See [Programmatic Usage Guide](docs/programmatic-usage.md) for `McpToolChat`, usage statistics, toolsets, and common patterns.
+For full control you can still construct `McpToolChat` manually — see the [Programmatic Usage Guide](docs/programmatic-usage.md) for details on `from_config()`, model selection at call time, usage statistics, toolsets, and common patterns.
+
+## Examples
+
+The [examples/](examples/) directory contains runnable scripts organised by feature:
+
+- **[tool_calling](examples/tool_calling/)** -- basic tool-calling with `McpToolChat`, including manual construction
+- **[tool_discovery](examples/tool_discovery/)** -- deferred tool loading with the `search-tools` meta-tool
+- **[tool_sets](examples/tool_sets/)** -- restricting available tools per request with toolsets
+
+Each subfolder has its own `config.json`. To run an example:
+
+```bash
+cd examples/tool_calling
+uv run python chat_weather.py
+```
+
+See the [examples README](examples/README.md) for full details.
 
 ## Architecture
 

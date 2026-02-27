@@ -4,21 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "casual-mcp"
-version = "0.8.0"
+version = "1.0.0"
 description = "Multi-server MCP client for LLM tool orchestration"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Alex Stansfield" }]
 dependencies = [
-    "casual-llm[openai]>=0.6.0",
-    "dateparser>=1.2.1",
+    "casual-llm>=0.8.0",
     "fastapi>=0.115.12",
-    "fastmcp>=2.14.5,<3.0.0",
+    "fastmcp>=3.0.0",
     "jinja2>=3.1.6",
     "python-dotenv>=1.1.0",
     "questionary>=2.1.0",
-    "requests>=2.32.3",
+    "rank-bm25>=0.2.2",
     "rich>=14.0.0",
     "typer>=0.19.2",
     "uvicorn>=0.34.2",
@@ -43,10 +42,6 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-[tool.black]
-line-length = 100
-target-version = ['py310']
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
@@ -59,7 +54,7 @@ warn_unused_configs = true
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
+    "casual-llm[openai,ollama,anthropic]>=0.8.0",
     "coverage>=7.8.0",
     "mypy>=1.15.0",
     "pytest>=8.3.5",
@@ -68,12 +63,3 @@ dev = [
     "pytest-mock>=3.12.0",
     "ruff>=0.11.10",
 ]
-
-[tool.bumpversion]
-current_version = "0.8.0"
-commit = true
-tag = true
-
-[tool.bumpversion.file."pyproject.toml"]
-search = 'version = "{current_version}"'
-replace = 'version = "{new_version}"'

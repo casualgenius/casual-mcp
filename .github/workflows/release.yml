@@ -47,7 +47,7 @@ jobs:
 
       - name: Run linting checks
         run: |
-          uv run black --check src/ tests/ examples/
+          uv run ruff format --check src/ tests/ examples/
           uv run ruff check src/ tests/ examples/
 
       - name: Run type checks

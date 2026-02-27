@@ -15,6 +15,7 @@ from rich.table import Table
 
 from casual_mcp.models.mcp_server_config import RemoteServerConfig
 from casual_mcp.models.toolset_config import ExcludeSpec, ToolSpec
+from casual_mcp.tool_discovery import partition_tools
 from casual_mcp.tool_filter import extract_server_and_tool
 from casual_mcp.utils import load_config, load_mcp_client
 
@@ -23,7 +24,7 @@ console = Console()
 
 
 @app.command()
-def serve(host: str = "0.0.0.0", port: int = 8000, reload: bool = True) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
     """
     Start the Casual MCP API server.
     """
@@ -89,10 +90,28 @@ def models() -> None:
 def tools() -> None:
     config = load_config("casual_mcp_config.json")
     mcp_client = load_mcp_client(config)
-    table = Table("Name", "Description")
     tool_list = run_async_with_cleanup(get_tools_and_cleanup(mcp_client))
-    for tool in tool_list:
-        table.add_row(tool.name, tool.description)
+
+    # Check if tool discovery is configured and enabled
+    discovery = config.tool_discovery
+    discovery_enabled = discovery is not None and discovery.enabled
+
+    if discovery_enabled:
+        server_names = set(config.servers.keys())
+        _, deferred_by_server = partition_tools(tool_list, config, server_names)
+        deferred_names: set[str] = set()
+        for server_tools in deferred_by_server.values():
+            for t in server_tools:
+                deferred_names.add(t.name)
+        table = Table("Name", "Description", "Status")
+        for tool in tool_list:
+            status = "[yellow]deferred[/yellow]" if tool.name in deferred_names else "loaded"
+            table.add_row(tool.name, tool.description, status)
+    else:
+        table = Table("Name", "Description")
+        for tool in tool_list:
+            table.add_row(tool.name, tool.description)
+
     console.print(table)
 
 

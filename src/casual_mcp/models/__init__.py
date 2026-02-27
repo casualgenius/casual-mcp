@@ -9,6 +9,7 @@ from casual_llm import (
 
 from .chat_stats import (
     ChatStats,
+    DiscoveryStats,
     TokenUsageStats,
     ToolCallStats,
 )
@@ -18,6 +19,7 @@ from .mcp_server_config import (
     RemoteServerConfig,
     StdioServerConfig,
 )
+from .tool_discovery_config import ToolDiscoveryConfig
 from .toolset_config import (
     ExcludeSpec,
     ToolSetConfig,
@@ -32,6 +34,7 @@ __all__ = [
     "SystemMessage",
     "ChatMessage",
     "ChatStats",
+    "DiscoveryStats",
     "TokenUsageStats",
     "ToolCallStats",
     "McpClientConfig",
@@ -39,6 +42,7 @@ __all__ = [
     "McpServerConfig",
     "StdioServerConfig",
     "RemoteServerConfig",
+    "ToolDiscoveryConfig",
     "ExcludeSpec",
     "ToolSetConfig",
     "ToolSpec",

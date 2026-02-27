@@ -46,53 +46,72 @@ Tools are cached with a 30-second TTL by default. If you add/remove MCP servers:
 
 ### Missing Required Fields
 
+Models require both a `client` reference and a `model` name:
+
 ```json
 // ❌ Wrong - missing "model" field
 {
+  "clients": { "openai": { "provider": "openai" } },
   "models": {
     "my-model": {
-      "provider": "openai"
+      "client": "openai"
     }
   }
 }
 
 // ✅ Correct
 {
+  "clients": { "openai": { "provider": "openai" } },
   "models": {
     "my-model": {
-      "provider": "openai",
+      "client": "openai",
       "model": "gpt-4.1"
     }
   }
 }
 ```
 
-### Invalid Provider
+### Model References Missing Client
+
+Models must reference a client defined in the `clients` section:
 
 ```json
-// ❌ Wrong - unsupported provider
+// ❌ Wrong - "ollama" client not defined
 {
+  "clients": { "openai": { "provider": "openai" } },
   "models": {
     "my-model": {
-      "provider": "anthropic",
-      "model": "claude-3"
-    }
-  }
-}
-
-// ✅ Correct - use "openai" or "ollama"
-{
-  "models": {
-    "openai-model": {
-      "provider": "openai",
-      "model": "gpt-4.1"
-    },
-    "ollama-model": {
-      "provider": "ollama",
+      "client": "ollama",
       "model": "qwen2.5:7b-instruct"
     }
   }
 }
+
+// ✅ Correct - define the client first
+{
+  "clients": {
+    "openai": { "provider": "openai" },
+    "ollama": { "provider": "ollama", "base_url": "http://localhost:11434" }
+  },
+  "models": {
+    "gpt-model": {
+      "client": "openai",
+      "model": "gpt-4.1"
+    },
+    "ollama-model": {
+      "client": "ollama",
+      "model": "qwen2.5:7b-instruct"
+    }
+  }
+}
+```
+
+### Legacy Config Format
+
+If you're upgrading from 0.x, you may have the old format with `provider` and `endpoint` directly in model entries. Run the migration command:
+
+```bash
+casual-mcp migrate-config
 ```
 
 ## Environment Variables
@@ -100,6 +119,8 @@ Tools are cached with a 30-second TTL by default. If you add/remove MCP servers:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | - | Required for OpenAI provider (any string for local APIs) |
+| `ANTHROPIC_API_KEY` | - | Required for Anthropic provider |
 | `TOOL_RESULT_FORMAT` | `result` | Format: `result`, `function_result`, `function_args_result` |
 | `MCP_TOOL_CACHE_TTL` | `30` | Cache TTL in seconds (0 for indefinite) |
+| `MCP_MAX_CHAT_ITERATIONS` | `50` | Maximum tool-calling loop iterations before aborting |
 | `LOG_LEVEL` | `INFO` | Logging level |

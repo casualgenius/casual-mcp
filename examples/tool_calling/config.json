@@ -17,15 +17,6 @@
       "client": "ollama",
       "model": "qwen2.5:7b-instruct"
     },
-    "ollama-qwen2.5-7b-instruct-with-template": {
-      "client": "ollama",
-      "model": "qwen2.5:7b-instruct",
-      "template": "ollama-tools"
-    },
-    "gpt-5": {
-      "client": "openai",
-      "model": "gpt-5"
-    },
     "gpt-5-mini": {
       "client": "openai",
       "model": "gpt-5-mini"
@@ -33,10 +24,6 @@
     "gpt-5-nano": {
       "client": "openai",
       "model": "gpt-5-nano"
-    },
-    "gpt-4.1": {
-      "client": "openai",
-      "model": "gpt-4.1"
     },
     "gpt-4.1-mini": {
       "client": "openai",
@@ -50,7 +37,7 @@
   "servers": {
     "math": {
       "command": "python",
-      "args": ["mcp-servers/math/server.py"]
+      "args": ["../../mcp-servers/math/server.py"]
     },
     "time": {
       "command": "uvx",
@@ -72,25 +59,6 @@
       "args": ["-y", "@lmcc-dev/mult-fetch-mcp-server"],
       "env": {
         "MCP_LANG": "en"
-      }
-    }
-  },
-  "tool_sets": {
-    "basic": {
-      "description": "Basic tools for time and math",
-      "servers": {
-        "math": true,
-        "time": ["current_time"]
-      }
-    },
-    "research": {
-      "description": "Research tools for weather and words",
-      "servers": {
-        "weather": true,
-        "words": {
-          "exclude": ["random_word"]
-        },
-        "fetch": true
       }
     }
   }

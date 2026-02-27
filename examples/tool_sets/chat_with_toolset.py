@@ -1,5 +1,5 @@
 """
-Example: Generate with toolsets.
+Example: Chat with toolsets.
 
 Demonstrates how to use toolsets to limit which tools are available to the LLM.
 This is useful for reducing token usage and restricting LLM capabilities.
@@ -10,12 +10,11 @@ import os
 
 from dotenv import load_dotenv
 
+from casual_llm import UserMessage
+
+from casual_mcp import McpToolChat, load_config
 from casual_mcp.logging import configure_logging
-from casual_mcp.mcp_tool_chat import McpToolChat
 from casual_mcp.models.toolset_config import ExcludeSpec, ToolSetConfig
-from casual_mcp.model_factory import ModelFactory
-from casual_mcp.tool_cache import ToolCache
-from casual_mcp.utils import load_config, load_mcp_client
 
 load_dotenv()
 configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
@@ -24,8 +23,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-nano")
 
 
 async def main():
-    config = load_config("casual_mcp_config.json")
-    mcp_client = load_mcp_client(config)
+    config = load_config("config.json")
 
     if MODEL_NAME not in config.models:
         print(f"Model '{MODEL_NAME}' not found in config. Available models:")
@@ -33,21 +31,12 @@ async def main():
             print(f"  - {name}")
         return
 
-    model_factory = ModelFactory(config)
-    llm_model = model_factory.get_model(MODEL_NAME)
+    chat = McpToolChat.from_config(config)
 
     print(f"Model: {MODEL_NAME}")
 
-    tool_cache = ToolCache(mcp_client)
-    chat = McpToolChat(
-        mcp_client=mcp_client,
-        model=llm_model,
-        tool_cache=tool_cache,
-        server_names=set(config.servers.keys()),
-    )
-
     # Show all available tools
-    all_tools = await tool_cache.get_tools()
+    all_tools = await chat.tool_cache.get_tools()
     print(f"\nAll available tools ({len(all_tools)}):")
     for tool in all_tools:
         print(f"  - {tool.name}")
@@ -63,7 +52,8 @@ async def main():
         prompt = "What time is it?"
         print(f"\nUser: {prompt}")
 
-        response = await chat.generate(prompt, tool_set=toolset)
+        messages = [UserMessage(content=prompt)]
+        response = await chat.chat(messages, model=MODEL_NAME, tool_set=toolset)
         print(f"Assistant: {response[-1].content}")
 
     # Option 2: Create a toolset programmatically
@@ -83,7 +73,8 @@ async def main():
         print(f"\nUser: {prompt}")
         print(f"Toolset: {custom_toolset.description}")
 
-        response = await chat.generate(prompt, tool_set=custom_toolset)
+        messages = [UserMessage(content=prompt)]
+        response = await chat.chat(messages, model=MODEL_NAME, tool_set=custom_toolset)
         print(f"Assistant: {response[-1].content}")
 
         # Show stats
@@ -109,7 +100,7 @@ async def main():
         print(f"Toolset servers: {list(exclude_toolset.servers.keys())}")
 
     # Clean up
-    await mcp_client.close()
+    await chat.mcp_client.close()
 
 
 if __name__ == "__main__":

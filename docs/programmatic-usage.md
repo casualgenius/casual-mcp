@@ -6,54 +6,79 @@ Import and use the core framework in your own Python code.
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
+from casual_mcp import McpToolChat, load_config
 
-model = "gpt-4.1-nano"
+config = load_config("casual_mcp_config.json")
+chat = McpToolChat.from_config(config)
+
 messages = [
     SystemMessage(content="You are a tool calling assistant."),
     UserMessage(content="Will I need an umbrella in London today?")
 ]
-
-# Load config and setup
-config = load_config("casual_mcp_config.json")
-mcp_client = load_mcp_client(config)
-
-# Get model and run chat
-model_factory = ModelFactory(config)
-llm_model = model_factory.get_model(model)
-
-chat = McpToolChat(mcp_client, llm_model)
-response_messages = await chat.chat(messages)
+response_messages = await chat.chat(messages, model="gpt-4.1-nano")
 ```
 
 ## Core Components
 
 ### McpToolChat
 
-Orchestrates LLM interaction with tools using a recursive loop. Accepts a `Model` instance from casual-llm.
+Orchestrates LLM interaction with tools using a recursive loop.
+
+**`from_config()` (recommended)** — builds all dependencies from a `Config` object:
+
+```python
+from casual_mcp import McpToolChat, load_config
+
+config = load_config("casual_mcp_config.json")
+chat = McpToolChat.from_config(config, system="You are a helpful assistant.")
+
+# Select model at call time
+response = await chat.chat(messages, model="gpt-4.1")
+
+# Override system prompt per call
+response = await chat.chat(messages, model="gpt-4.1", system="Be concise.")
+```
+
+A single `McpToolChat` instance can serve multiple models — pass the model name to each `chat()` call.
+
+**Full message control:**
 
 ```python
 from casual_llm import SystemMessage, UserMessage
-from casual_mcp import McpToolChat
-from casual_mcp.tool_cache import ToolCache
 
-# Setup
-tool_cache = ToolCache(mcp_client)
-chat = McpToolChat(mcp_client, llm_model, system_prompt, tool_cache=tool_cache)
-
-# Simple prompt-based interface
-response = await chat.generate("What time is it in London?")
-
-# With session (for testing/dev only)
-response = await chat.generate("What time is it?", session_id="my-session")
-
-# Full message control
 messages = [
     SystemMessage(content="You are a helpful assistant."),
     UserMessage(content="What time is it in London?")
 ]
-response = await chat.chat(messages)
+response = await chat.chat(messages, model="gpt-4.1")
 ```
+
+### Advanced: Manual Construction
+
+For full control over dependencies (custom tool cache, pre-built model, etc.):
+
+```python
+from casual_mcp import McpToolChat, ModelFactory, load_config, load_mcp_client
+from casual_mcp.tool_cache import ToolCache
+
+config = load_config("casual_mcp_config.json")
+mcp_client = load_mcp_client(config)
+tool_cache = ToolCache(mcp_client)
+model_factory = ModelFactory(config)
+llm_model = model_factory.get_model("gpt-4.1")
+
+chat = McpToolChat(
+    mcp_client,
+    system="You are a helpful assistant.",
+    tool_cache=tool_cache,
+    model_factory=model_factory,
+)
+response = await chat.chat(messages, model="gpt-4.1")
+# or pass a Model instance directly:
+response = await chat.chat(messages, model=llm_model)
+```
+
+Note: tool discovery is only available via `from_config()`. Manual construction does not support discovery.
 
 ### ModelFactory
 
@@ -77,10 +102,10 @@ mcp_client = load_mcp_client(config)
 
 ## Usage Statistics
 
-After calling `chat()` or `generate()`, retrieve usage statistics via `get_stats()`:
+After calling `chat()`, retrieve usage statistics via `get_stats()`:
 
 ```python
-response = await chat.chat(messages)
+response = await chat.chat(messages, model="gpt-4.1")
 stats = chat.get_stats()
 
 # Token usage (accumulated across all LLM calls)
@@ -97,14 +122,14 @@ stats.tool_calls.total     # Total tool calls
 stats.llm_calls  # 1 = no tools, 2+ = tool loop iterations
 ```
 
-Stats reset at the start of each `chat()` or `generate()` call.
+Stats reset at the start of each `chat()` call.
 
 ## Response Structure
 
-`chat()` and `generate()` return a list of `ChatMessage` objects:
+`chat()` returns a list of `ChatMessage` objects:
 
 ```python
-response_messages = await chat.chat(messages)
+response_messages = await chat.chat(messages, model="gpt-4.1")
 # Returns: list[ChatMessage]
 
 # Get final answer
@@ -139,10 +164,7 @@ toolset = ToolSetConfig(
 )
 
 # Use with chat()
-response = await chat.chat(messages, tool_set=toolset)
-
-# Use with generate()
-response = await chat.generate("What time is it?", tool_set=toolset)
+response = await chat.chat(messages, model="gpt-4.1", tool_set=toolset)
 ```
 
 ## Message Types
@@ -169,6 +191,7 @@ from casual_mcp.models import (
     ToolSetConfig,
     ExcludeSpec,
     ChatStats,
+    DiscoveryStats,
     TokenUsageStats,
     ToolCallStats,
 )
@@ -205,6 +228,8 @@ You have access to these tools:
 To use a tool, respond with JSON: {"tool": "tool_name", "args": {...}}
 ```
 
+When using `from_config()`, the template is resolved automatically when you pass the model name to `chat()`. An explicit `system` parameter always takes precedence over the template.
+
 ### Tool Result Formatting
 
 Control how results are presented to the LLM:
@@ -215,23 +240,18 @@ export TOOL_RESULT_FORMAT=function_result     # "get_weather → 72°F"
 export TOOL_RESULT_FORMAT=function_args_result # "get_weather(location='London') → 15°C"
 ```
 
-### Session Management
+### Multi-Turn Conversations
 
-> **Note**: Sessions are for testing/development only. In production, manage your own message history.
+Manage your own message history for multi-turn conversations:
 
 ```python
-# Development/testing with sessions
-response = await chat.generate("What's the weather?", session_id="test-123")
-response = await chat.generate("How about tomorrow?", session_id="test-123")
-
-# Production: manage your own history
 messages = []
 messages.append(UserMessage(content="What's the weather?"))
-response_msgs = await chat.chat(messages)
+response_msgs = await chat.chat(messages, model="gpt-4.1")
 messages.extend(response_msgs)
 
 messages.append(UserMessage(content="How about tomorrow?"))
-response_msgs = await chat.chat(messages)
+response_msgs = await chat.chat(messages, model="gpt-4.1")
 ```
 
 ### Tool Cache

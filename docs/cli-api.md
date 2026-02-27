@@ -7,13 +7,14 @@
 Start the API server.
 
 ```bash
-casual-mcp serve --host 0.0.0.0 --port 8000
+casual-mcp serve --host 127.0.0.1 --port 8000
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--host` | `0.0.0.0` | Host to bind |
+| `--host` | `127.0.0.1` | Host to bind |
 | `--port` | `8000` | Port to serve on |
+| `--reload` | `false` | Enable auto-reload on file changes |
 
 ### `casual-mcp servers`
 
@@ -98,7 +99,7 @@ $ casual-mcp tools
 ### Start the Server
 
 ```bash
-casual-mcp serve --host 0.0.0.0 --port 8000
+casual-mcp serve --host 127.0.0.1 --port 8000
 ```
 
 ### POST /chat
@@ -113,6 +114,7 @@ Send full message history for a chat completion.
     "messages": [
         {"role": "user", "content": "What does consistent mean?"}
     ],
+    "system_prompt": "You are a helpful dictionary assistant.",
     "include_stats": true,
     "tool_set": "research"
 }
@@ -122,6 +124,7 @@ Send full message history for a chat completion.
 |-------|----------|-------------|
 | `model` | Yes | LLM model to use |
 | `messages` | Yes | List of chat messages |
+| `system_prompt` | No | Override the default system prompt for this request |
 | `include_stats` | No | Include usage statistics (default: `false`) |
 | `tool_set` | No | Name of toolset to limit available tools |
 
@@ -146,68 +149,6 @@ Send full message history for a chat completion.
     }
 }
 ```
-
-### POST /generate
-
-Send a prompt with optional session management.
-
-**Request:**
-
-```json
-{
-    "model": "gpt-4o-mini",
-    "prompt": "What does consistent mean?",
-    "session_id": "my-session",
-    "include_stats": true,
-    "tool_set": "research"
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `model` | Yes | LLM model to use |
-| `prompt` | Yes | User prompt |
-| `session_id` | No | Session ID for context continuity |
-| `include_stats` | No | Include usage statistics (default: `false`) |
-| `tool_set` | No | Name of toolset to limit available tools |
-
-### GET /generate/session/{session_id}
-
-Retrieve all messages from a session.
-
-**Example Request:**
-
-```bash
-curl http://localhost:8000/generate/session/my-session
-```
-
-**Response (200 OK):**
-
-Returns an array of chat messages from the session:
-
-```json
-[
-    {
-        "role": "user",
-        "content": "What time is it?"
-    },
-    {
-        "role": "assistant",
-        "content": "The current time is 3:45 PM.",
-        "tool_calls": null
-    }
-]
-```
-
-**Response (404 Not Found):**
-
-```json
-{
-    "detail": "Session not found"
-}
-```
-
-> **Note:** Sessions are stored in-memory and cleared on server restart. Use sessions for testing/development only.
 
 ### GET /toolsets
 
