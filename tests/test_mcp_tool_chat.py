@@ -798,6 +798,24 @@ class TestMalformedToolArguments:
         assert result.tool_call_id == "call_1"
 
 
+class TestMcpToolChatContextManager:
+    """Tests for McpToolChat async context manager."""
+
+    async def test_aenter_connects_and_aexit_disconnects(self):
+        """async with McpToolChat should connect/disconnect the MCP client."""
+        client = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        chat = McpToolChat(client, "System")
+
+        async with chat as returned:
+            assert returned is chat
+            client.__aenter__.assert_called_once()
+
+        client.__aexit__.assert_called_once()
+
+
 class TestConcurrentRequests:
     """Test that concurrent chat() calls don't corrupt each other's stats."""
 

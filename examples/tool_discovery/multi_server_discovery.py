@@ -35,58 +35,66 @@ async def main():
             print(f"  - {name}")
         return
 
-    chat = McpToolChat.from_config(config)
+    async with McpToolChat.from_config(config) as chat:
+        print(f"Model: {MODEL_NAME}")
 
-    print(f"Model: {MODEL_NAME}")
+        # This prompt requires tools from two different servers:
+        #   - weather server: current_weather / forecast
+        #   - time server: next_weekday / current_time
+        messages = [
+            SystemMessage(
+                content=(
+                    "You are a helpful assistant. Use the available tools to answer "
+                    "the user's question accurately."
+                )
+            ),
+            UserMessage(
+                content=(
+                    "I'm planning a weekend trip to Tokyo. "
+                    "What date is next Saturday, and what's the weather forecast for Tokyo "
+                    "that day?"
+                )
+            ),
+        ]
 
-    # This prompt requires tools from two different servers:
-    #   - weather server: current_weather / forecast
-    #   - time server: next_weekday / current_time
-    messages = [
-        SystemMessage(
-            content=(
-                "You are a helpful assistant. Use the available tools to answer "
-                "the user's question accurately."
-            )
-        ),
-        UserMessage(
-            content=(
-                "I'm planning a weekend trip to Tokyo. "
-                "What date is next Saturday, and what's the weather forecast for Tokyo that day?"
-            )
-        ),
-    ]
+        print("\nUser: I'm planning a weekend trip to Tokyo.")
+        print(
+            "      What date is next Saturday, and what's the weather forecast for Tokyo that day?"
+        )
+        print("\n(The LLM needs to discover tools from both the 'time' and 'weather' servers)\n")
 
-    print("\nUser: I'm planning a weekend trip to Tokyo.")
-    print("      What date is next Saturday, and what's the weather forecast for Tokyo that day?")
-    print("\n(The LLM needs to discover tools from both the 'time' and 'weather' servers)\n")
+        response_messages = await chat.chat(messages, model=MODEL_NAME)
 
-    response_messages = await chat.chat(messages, model=MODEL_NAME)
+        # Show the conversation flow
+        for msg in response_messages:
+            if msg.role == "assistant":
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
+                if msg.content:
+                    print(f"\nAssistant: {msg.content}")
+            elif msg.role == "tool":
+                content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+                print(f"  Tool result ({msg.name}): {content}")
 
-    # Show the conversation flow
-    for msg in response_messages:
-        if msg.role == "assistant":
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
-            if msg.content:
-                print(f"\nAssistant: {msg.content}")
-        elif msg.role == "tool":
-            content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
-            print(f"  Tool result ({msg.name}): {content}")
-
-    # Show discovery stats
-    stats = chat.get_stats()
-    if stats:
-        print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
-        if stats.discovery:
-            print(
-                f"Discovery: {stats.discovery.search_calls} search calls, "
-                f"{stats.discovery.tools_discovered} tools discovered"
-            )
-
-    await chat.mcp_client.close()
+        # Show discovery stats
+        stats = chat.get_stats()
+        if stats:
+            print(f"\nStats: {stats.llm_calls} LLM calls, {stats.tool_calls.total} tool calls")
+            if stats.discovery:
+                print(
+                    f"Discovery: {stats.discovery.search_calls} search calls, "
+                    f"{stats.discovery.tools_discovered} tools discovered"
+                )
 
 
 if __name__ == "__main__":
+    # Python <3.12: subprocess transport __del__ fires after the event loop
+    # closes, producing harmless "Event loop is closed" RuntimeErrors.
+    import sys
+
+    _orig_hook = sys.unraisablehook
+    sys.unraisablehook = lambda u: (
+        None if "Event loop is closed" in str(u.exc_value) else _orig_hook(u)
+    )
     asyncio.run(main())

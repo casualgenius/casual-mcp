@@ -9,13 +9,12 @@ from casual_llm import SystemMessage, UserMessage
 from casual_mcp import McpToolChat, load_config
 
 config = load_config("casual_mcp_config.json")
-chat = McpToolChat.from_config(config)
-
-messages = [
-    SystemMessage(content="You are a tool calling assistant."),
-    UserMessage(content="Will I need an umbrella in London today?")
-]
-response_messages = await chat.chat(messages, model="gpt-4.1-nano")
+async with McpToolChat.from_config(config) as chat:
+    messages = [
+        SystemMessage(content="You are a tool calling assistant."),
+        UserMessage(content="Will I need an umbrella in London today?")
+    ]
+    response_messages = await chat.chat(messages, model="gpt-4.1-nano")
 ```
 
 ## Core Components
@@ -30,14 +29,15 @@ Orchestrates LLM interaction with tools using a recursive loop.
 from casual_mcp import McpToolChat, load_config
 
 config = load_config("casual_mcp_config.json")
-chat = McpToolChat.from_config(config, system="You are a helpful assistant.")
+async with McpToolChat.from_config(config, system="You are a helpful assistant.") as chat:
+    # Select model at call time
+    response = await chat.chat(messages, model="gpt-4.1")
 
-# Select model at call time
-response = await chat.chat(messages, model="gpt-4.1")
-
-# Override system prompt per call
-response = await chat.chat(messages, model="gpt-4.1", system="Be concise.")
+    # Override system prompt per call
+    response = await chat.chat(messages, model="gpt-4.1", system="Be concise.")
 ```
+
+Using `async with` keeps the MCP server connections alive across multiple `chat()` calls. Without it, each `chat()` call manages its own connection — functional, but slower when making multiple calls.
 
 A single `McpToolChat` instance can serve multiple models — pass the model name to each `chat()` call.
 
@@ -73,9 +73,10 @@ chat = McpToolChat(
     tool_cache=tool_cache,
     model_factory=model_factory,
 )
-response = await chat.chat(messages, model="gpt-4.1")
-# or pass a Model instance directly:
-response = await chat.chat(messages, model=llm_model)
+async with chat:
+    response = await chat.chat(messages, model="gpt-4.1")
+    # or pass a Model instance directly:
+    response = await chat.chat(messages, model=llm_model)
 ```
 
 Note: tool discovery is only available via `from_config()`. Manual construction does not support discovery.
@@ -242,17 +243,52 @@ export TOOL_RESULT_FORMAT=function_args_result # "get_weather(location='London')
 
 ### Multi-Turn Conversations
 
-Manage your own message history for multi-turn conversations:
+Manage your own message history for multi-turn conversations. Using `async with` keeps the connection alive between turns, avoiding reconnection overhead:
 
 ```python
-messages = []
-messages.append(UserMessage(content="What's the weather?"))
-response_msgs = await chat.chat(messages, model="gpt-4.1")
-messages.extend(response_msgs)
+config = load_config("casual_mcp_config.json")
+async with McpToolChat.from_config(config) as chat:
+    messages = []
+    messages.append(UserMessage(content="What's the weather?"))
+    response_msgs = await chat.chat(messages, model="gpt-4.1")
+    messages.extend(response_msgs)
 
-messages.append(UserMessage(content="How about tomorrow?"))
-response_msgs = await chat.chat(messages, model="gpt-4.1")
+    messages.append(UserMessage(content="How about tomorrow?"))
+    response_msgs = await chat.chat(messages, model="gpt-4.1")
 ```
+
+### FastAPI Integration
+
+Use the FastAPI lifespan to keep MCP connections alive for the server's lifetime:
+
+```python
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
+from fastapi import FastAPI
+from casual_llm import UserMessage
+from casual_mcp import McpToolChat, load_config
+
+config = load_config("casual_mcp_config.json")
+chat: McpToolChat
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    global chat
+    chat = McpToolChat.from_config(config, system="You are a helpful assistant.")
+    async with chat:
+        yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/chat")
+async def handle_chat(user_message: str):
+    messages = [UserMessage(content=user_message)]
+    response = await chat.chat(messages, model="gpt-4.1")
+    return {"response": response[-1].content}
+```
+
+The `async with chat` in the lifespan keeps MCP server connections open across all requests. Without it, each `chat()` call would connect and disconnect independently.
 
 ### Tool Cache
 

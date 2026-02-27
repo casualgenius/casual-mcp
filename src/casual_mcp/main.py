@@ -51,9 +51,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialise shared resources on startup; clean up on shutdown."""
     state.config = load_config("casual_mcp_config.json")
     state.chat_instance = McpToolChat.from_config(state.config, system=default_system_prompt)
-    logger.info("Application started")
-    yield
-    logger.info("Application shut down")
+    async with state.chat_instance:
+        logger.info("Application started")
+        yield
+        logger.info("Application shut down")
 
 
 app = FastAPI(lifespan=lifespan)
