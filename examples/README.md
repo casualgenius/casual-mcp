@@ -37,6 +37,7 @@ Core tool-calling examples using `McpToolChat.from_config()`.
 |--------|-------------|
 | `chat_weather.py` | Asks the LLM to compare weather in two cities using weather tools |
 | `chat_fetch.py` | Asks the LLM to fetch and summarise a webpage |
+| `multiturn.py` | Multi-turn conversation that asks about Sydney's weather then compares it to Tokyo, demonstrating persistent connections and per-turn stats |
 | `manual_construction.py` | Builds `McpToolChat` manually from individual components (`ToolCache`, `ModelFactory`, `load_mcp_client`) instead of using `from_config()` |
 
 ### [tool_discovery/](tool_discovery/)
